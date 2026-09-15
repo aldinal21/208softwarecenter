@@ -79,7 +79,7 @@ bool MainWindow::Create(HINSTANCE hInstance, int nCmdShow) {
         WS_EX_ACCEPTFILES, // Support Drag and Drop
         CLASS_NAME,
         L"208 Software Center - Pas Foto A4 Layout & Print",
-        WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN,
+        WS_OVERLAPPEDWINDOW,
         CW_USEDEFAULT, CW_USEDEFAULT,
         1060, 730,
         nullptr, nullptr, hInstance, this
@@ -981,10 +981,22 @@ LRESULT MainWindow::HandleMessage(UINT uMsg, WPARAM wParam, LPARAM lParam) {
             return 0;
         }
 
+        case WM_ACTIVATE: {
+            if (LOWORD(wParam) != WA_INACTIVE) {
+                RedrawWindow(m_hwnd, nullptr, nullptr, RDW_INVALIDATE | RDW_ERASE | RDW_ALLCHILDREN | RDW_UPDATENOW);
+            }
+            return 0;
+        }
+
         case WM_CTLCOLORSTATIC: {
             HDC hdcStatic = (HDC)wParam;
+            SetBkMode(hdcStatic, OPAQUE);
             SetBkColor(hdcStatic, GetSysColor(COLOR_BTNFACE));
             SetTextColor(hdcStatic, GetSysColor(COLOR_WINDOWTEXT));
+            return (LRESULT)GetSysColorBrush(COLOR_BTNFACE);
+        }
+
+        case WM_CTLCOLORBTN: {
             return (LRESULT)GetSysColorBrush(COLOR_BTNFACE);
         }
 
@@ -1003,9 +1015,8 @@ LRESULT MainWindow::HandleMessage(UINT uMsg, WPARAM wParam, LPARAM lParam) {
             GetClientRect(m_hwnd, &rcClient);
 
             // Bersihkan seluruh background window dengan warna standar (COLOR_BTNFACE)
-            // Area child controls otomatis di-protect karena WS_CLIPCHILDREN aktif
             HBRUSH hbrFace = GetSysColorBrush(COLOR_BTNFACE);
-            FillRect(hdc, &ps.rcPaint, hbrFace);
+            FillRect(hdc, &rcClient, hbrFace);
 
             RECT rcPreview = { 375, 48, rcClient.right - 10, rcClient.bottom - 10 };
             if (rcPreview.right > rcPreview.left && rcPreview.bottom > rcPreview.top) {

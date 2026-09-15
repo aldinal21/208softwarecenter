@@ -93,7 +93,7 @@ bool PrintPreviewDialog::CreateAndRun() {
         WS_EX_DLGMODALFRAME,
         CLASS_NAME,
         L"Pratinjau Cetak (Print Preview) - Pas Foto A4",
-        WS_POPUPWINDOW | WS_CAPTION | WS_THICKFRAME | WS_MAXIMIZEBOX | WS_MINIMIZEBOX | WS_CLIPCHILDREN,
+        WS_POPUPWINDOW | WS_CAPTION | WS_THICKFRAME | WS_MAXIMIZEBOX | WS_MINIMIZEBOX,
         dlgX, dlgY, dlgW, dlgH,
         m_hParent, nullptr, m_hInstance, this
     );
@@ -439,6 +439,13 @@ LRESULT PrintPreviewDialog::HandleMessage(UINT uMsg, WPARAM wParam, LPARAM lPara
         return 0;
     }
 
+    case WM_ACTIVATE: {
+        if (LOWORD(wParam) != WA_INACTIVE) {
+            RedrawWindow(m_hwnd, nullptr, nullptr, RDW_INVALIDATE | RDW_ERASE | RDW_ALLCHILDREN | RDW_UPDATENOW);
+        }
+        return 0;
+    }
+
     case WM_SIZE: {
         int width = LOWORD(lParam);
         int height = HIWORD(lParam);
@@ -452,6 +459,7 @@ LRESULT PrintPreviewDialog::HandleMessage(UINT uMsg, WPARAM wParam, LPARAM lPara
 
     case WM_CTLCOLORSTATIC: {
         HDC hdcStatic = (HDC)wParam;
+        SetBkMode(hdcStatic, OPAQUE);
         SetBkColor(hdcStatic, GetSysColor(COLOR_BTNFACE));
         SetTextColor(hdcStatic, GetSysColor(COLOR_WINDOWTEXT));
         return (LRESULT)GetSysColorBrush(COLOR_BTNFACE);
