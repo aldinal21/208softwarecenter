@@ -28,6 +28,16 @@ public:
         double previewScale = 1.0
     );
 
+    void RenderSheet(
+        Gdiplus::Graphics& graphics,
+        const PageLayout& page,
+        const PaperConfig& paper,
+        double targetDpiX,
+        double targetDpiY,
+        bool isPreviewMode = false,
+        double previewScale = 1.0
+    );
+
     // Render A4 canvas ke GDI+ Graphics untuk pageIndex tertentu dari LayoutResult
     void RenderSheet(
         Gdiplus::Graphics& graphics,
@@ -81,7 +91,8 @@ private:
         Gdiplus::Bitmap* bmp,
         const PlacedPhotoSlot& slot,
         const PaperConfig& paper,
-        double dpi,
+        double dpiX,
+        double dpiY,
         double scale
     );
 };

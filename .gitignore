@@ -5,7 +5,9 @@ build/*.exe
 *.obj
 *.exe
 *.dll
-*.zip
+
+# Release zip package
+!208softwarecenter.zip
 
 # IDE & Editor files
 .vscode/

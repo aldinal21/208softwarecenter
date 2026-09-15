@@ -63,7 +63,19 @@ void ImageProcessor::RenderSheet(
     bool isPreviewMode,
     double previewScale
 ) {
-    double dpi = targetDpi;
+    RenderSheet(graphics, page, paper, targetDpi, targetDpi, isPreviewMode, previewScale);
+}
+
+void ImageProcessor::RenderSheet(
+    Gdiplus::Graphics& graphics,
+    const PageLayout& page,
+    const PaperConfig& paper,
+    double targetDpiX,
+    double targetDpiY,
+    bool isPreviewMode,
+    double previewScale
+) {
+    if (targetDpiY <= 0.0) targetDpiY = targetDpiX;
     double scale = isPreviewMode ? previewScale : 1.0;
 
     if (isPreviewMode) {
@@ -77,8 +89,8 @@ void ImageProcessor::RenderSheet(
     }
 
     // Hitung total dimensi kertas dalam unit pixel target
-    int paperPxW = MmToPixels(paper.widthMm, dpi);
-    int paperPxH = MmToPixels(paper.heightMm, dpi);
+    int paperPxW = MmToPixels(paper.widthMm, targetDpiX);
+    int paperPxH = MmToPixels(paper.heightMm, targetDpiY);
 
     if (isPreviewMode) {
         paperPxW = static_cast<int>(paperPxW * scale);
@@ -92,12 +104,12 @@ void ImageProcessor::RenderSheet(
     // 2. Render setiap foto pada posisinya di halaman ini
     for (const auto& slot : page.slots) {
         Gdiplus::Bitmap* bmp = GetOrLoadBitmap(slot.sourceFilePath);
-        DrawPhotoSlot(graphics, bmp, slot, paper, dpi, scale);
+        DrawPhotoSlot(graphics, bmp, slot, paper, targetDpiX, targetDpiY, scale);
     }
 
     // 3. Render Garis Batas Kertas Sisa (Scrap Line) jika ada sisa kertas
     if (page.usedHeightMm > 0 && page.usedHeightMm < paper.heightMm) {
-        int scrapLineY = MmToPixels(page.usedHeightMm, dpi);
+        int scrapLineY = MmToPixels(page.usedHeightMm, targetDpiY);
         if (isPreviewMode) scrapLineY = static_cast<int>(scrapLineY * scale);
 
         // Garis batas potong sisa kertas (Warna Cyan / Biru Panduan)
@@ -146,13 +158,14 @@ void ImageProcessor::DrawPhotoSlot(
     Gdiplus::Bitmap* bmp,
     const PlacedPhotoSlot& slot,
     const PaperConfig& paper,
-    double dpi,
+    double dpiX,
+    double dpiY,
     double scale
 ) {
-    int destX = MmToPixels(slot.xMm, dpi);
-    int destY = MmToPixels(slot.yMm, dpi);
-    int destW = MmToPixels(slot.widthMm, dpi);
-    int destH = MmToPixels(slot.heightMm, dpi);
+    int destX = MmToPixels(slot.xMm, dpiX);
+    int destY = MmToPixels(slot.yMm, dpiY);
+    int destW = MmToPixels(slot.widthMm, dpiX);
+    int destH = MmToPixels(slot.heightMm, dpiY);
 
     if (scale != 1.0) {
         destX = static_cast<int>(destX * scale);

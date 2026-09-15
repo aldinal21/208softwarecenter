@@ -792,7 +792,11 @@ void MainWindow::OnPrintDirect() {
             if (StartDocW(hdcPrinter, &docInfo) > 0) {
                 int dpiX = GetDeviceCaps(hdcPrinter, LOGPIXELSX);
                 int dpiY = GetDeviceCaps(hdcPrinter, LOGPIXELSY);
-                double printDpi = (dpiX > 0) ? static_cast<double>(dpiX) : 300.0;
+                double printDpiX = (dpiX > 0) ? static_cast<double>(dpiX) : 300.0;
+                double printDpiY = (dpiY > 0) ? static_cast<double>(dpiY) : printDpiX;
+
+                int physOffsetX = GetDeviceCaps(hdcPrinter, PHYSICALOFFSETX);
+                int physOffsetY = GetDeviceCaps(hdcPrinter, PHYSICALOFFSETY);
 
                 int startPage = 0;
                 int endPage = (int)m_currentLayout.pages.size() - 1;
@@ -810,7 +814,12 @@ void MainWindow::OnPrintDirect() {
                     if (StartPage(hdcPrinter) > 0) {
                         {
                             Gdiplus::Graphics g(hdcPrinter);
-                            m_imageProcessor.RenderSheet(g, m_currentLayout.pages[p], m_paperConfig, printDpi, false, 1.0);
+                            g.SetPageUnit(Gdiplus::UnitPixel);
+                            g.TranslateTransform(
+                                static_cast<Gdiplus::REAL>(-physOffsetX),
+                                static_cast<Gdiplus::REAL>(-physOffsetY)
+                            );
+                            m_imageProcessor.RenderSheet(g, m_currentLayout.pages[p], m_paperConfig, printDpiX, printDpiY, false, 1.0);
                         }
                         EndPage(hdcPrinter);
                         printedPages++;

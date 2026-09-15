@@ -8,8 +8,8 @@
 
 // Version Information
 VS_VERSION_INFO VERSIONINFO
-FILEVERSION     0,1,1,0
-PRODUCTVERSION  0,1,1,0
+FILEVERSION     0,1,2,0
+PRODUCTVERSION  0,1,2,0
 FILEFLAGSMASK   VS_FFI_FILEFLAGSMASK
 FILEFLAGS       0
 FILEOS          VOS_NT_WINDOWS32
@@ -22,12 +22,12 @@ BEGIN
         BEGIN
             VALUE "CompanyName",      "Toko Fotokopi 208"
             VALUE "FileDescription",  "208 Software Center - Pas Foto Utility"
-            VALUE "FileVersion",      "0.1.1.0"
+            VALUE "FileVersion",      "0.1.2.0"
             VALUE "InternalName",     "208softwarecenter"
             VALUE "LegalCopyright",   "Copyright (C) 2026 Toko 208"
             VALUE "OriginalFilename", "208softwarecenter.exe"
             VALUE "ProductName",      "208 Software Center"
-            VALUE "ProductVersion",   "0.1.1"
+            VALUE "ProductVersion",   "0.1.2"
         END
     END
     BLOCK "VarFileInfo"
