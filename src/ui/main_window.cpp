@@ -417,7 +417,7 @@ void MainWindow::InitControls() {
     SendMessageW(m_hBtnPrint, WM_SETFONT, (WPARAM)m_hFontBold, TRUE);
 
     m_hBtnExport = CreateWindowExW(
-        0, L"BUTTON", L"💾 Export File Gambar (300 DPI)",
+        0, L"BUTTON", L"💾 Export (PDF / PNG / JPG)",
         WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
         22, 638, 326, 32,
         m_hwnd, (HMENU)IDC_BTN_EXPORT, m_hInstance, nullptr
@@ -834,30 +834,46 @@ void MainWindow::OnExportImage() {
         return;
     }
 
-    WCHAR szPath[MAX_PATH] = L"PasFoto_A4_Layout.png";
+    WCHAR szPath[MAX_PATH] = L"PasFoto_A4_Layout.pdf";
     OPENFILENAMEW ofn = { sizeof(OPENFILENAMEW) };
     ofn.hwndOwner = m_hwnd;
-    ofn.lpstrFilter = L"PNG Image (*.png)\0*.png\0JPEG Image (*.jpg)\0*.jpg\0";
+    ofn.lpstrFilter = L"Dokumen PDF Multi-Halaman (*.pdf)\0*.pdf\0Gambar PNG (*.png)\0*.png\0Gambar JPEG (*.jpg)\0*.jpg\0Semua Format yang Didukung (*.pdf;*.png;*.jpg)\0*.pdf;*.png;*.jpg\0";
     ofn.lpstrFile = szPath;
     ofn.nMaxFile = MAX_PATH;
     ofn.Flags = OFN_EXPLORER | OFN_OVERWRITEPROMPT | OFN_PATHMUSTEXIST;
-    ofn.lpstrDefExt = L"png";
+    ofn.nFilterIndex = 1;
+    ofn.lpstrDefExt = L"pdf";
 
     if (GetSaveFileNameW(&ofn)) {
         std::wstring outPath = szPath;
-        std::wstring mime = (ofn.nFilterIndex == 2) ? L"image/jpeg" : L"image/png";
+        std::wstring lowerPath = outPath;
+        for (auto& c : lowerPath) c = towlower(c);
 
-        std::vector<std::wstring> files = m_imageProcessor.ExportAllPagesToFile(outPath, m_currentLayout, m_paperConfig, mime);
-        if (!files.empty()) {
-            wchar_t succMsg[256];
-            if (files.size() == 1) {
-                swprintf_s(succMsg, L"File layout 300 DPI berhasil disimpan:\n%s", files[0].c_str());
+        bool isPdf = (ofn.nFilterIndex == 1) || (lowerPath.length() >= 4 && lowerPath.substr(lowerPath.length() - 4) == L".pdf");
+        bool isJpg = (ofn.nFilterIndex == 3) || (lowerPath.length() >= 4 && lowerPath.substr(lowerPath.length() - 4) == L".jpg") || (lowerPath.length() >= 5 && lowerPath.substr(lowerPath.length() - 5) == L".jpeg");
+
+        if (isPdf) {
+            if (m_imageProcessor.ExportToPdf(outPath, m_currentLayout, m_paperConfig)) {
+                wchar_t succMsg[512];
+                swprintf_s(succMsg, L"Dokumen PDF %d halaman berhasil disimpan:\n%s", (int)m_currentLayout.pages.size(), outPath.c_str());
+                MessageBoxW(m_hwnd, succMsg, L"Export PDF Berhasil", MB_OK | MB_ICONINFORMATION);
             } else {
-                swprintf_s(succMsg, L"%d file layout halaman (300 DPI) berhasil disimpan!", (int)files.size());
+                MessageBoxW(m_hwnd, L"Gagal menyimpan dokumen PDF!", L"Export Gagal", MB_OK | MB_ICONERROR);
             }
-            MessageBoxW(m_hwnd, succMsg, L"Export Berhasil", MB_OK | MB_ICONINFORMATION);
         } else {
-            MessageBoxW(m_hwnd, L"Gagal menyimpan file gambar!", L"Export Gagal", MB_OK | MB_ICONERROR);
+            std::wstring mime = isJpg ? L"image/jpeg" : L"image/png";
+            std::vector<std::wstring> files = m_imageProcessor.ExportAllPagesToFile(outPath, m_currentLayout, m_paperConfig, mime);
+            if (!files.empty()) {
+                wchar_t succMsg[512];
+                if (files.size() == 1) {
+                    swprintf_s(succMsg, L"File layout 300 DPI berhasil disimpan:\n%s", files[0].c_str());
+                } else {
+                    swprintf_s(succMsg, L"%d file layout halaman (300 DPI) berhasil disimpan!", (int)files.size());
+                }
+                MessageBoxW(m_hwnd, succMsg, L"Export Berhasil", MB_OK | MB_ICONINFORMATION);
+            } else {
+                MessageBoxW(m_hwnd, L"Gagal menyimpan file gambar!", L"Export Gagal", MB_OK | MB_ICONERROR);
+            }
         }
     }
 }

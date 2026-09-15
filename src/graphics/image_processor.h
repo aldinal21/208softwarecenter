@@ -63,6 +63,13 @@ public:
         const std::wstring& mimeType = L"image/png"
     );
 
+    // Export seluruh halaman layout ke file Dokumen PDF Multi-Halaman (Zero-dependency native PDF 1.4)
+    bool ExportToPdf(
+        const std::wstring& outPath,
+        const LayoutResult& layout,
+        const PaperConfig& paper
+    );
+
     // Helper untuk mencari CLSID encoder GDI+ (PNG, JPEG, BMP)
     static int GetEncoderClsid(const WCHAR* format, CLSID* pClsid);
 
