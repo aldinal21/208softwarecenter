@@ -24,7 +24,7 @@ if %ERRORLEVEL% NEQ 0 (
 )
 
 echo [2/3] Compiling C++ Win32 GDI+ Sources...
-g++ -std=c++17 -O2 -s -mwindows ^
+g++ -std=c++17 -O2 -s -fno-ident -fstack-protector-strong -mwindows ^
     -static -static-libgcc -static-libstdc++ ^
     -specs=build/no-default-manifest.specs ^
     -Wl,--subsystem,windows:5.1 ^
@@ -44,5 +44,13 @@ if %ERRORLEVEL% NEQ 0 (
     exit /b %ERRORLEVEL%
 )
 
-echo [3/3] Build Berhasil: bin\208softwarecenter.exe
+echo [3/3] Signing Binary with Authenticode...
+where pwsh >nul 2>&1
+if %ERRORLEVEL% EQU 0 (
+    pwsh -NoProfile -ExecutionPolicy Bypass -File build\sign.ps1
+) else (
+    powershell -NoProfile -ExecutionPolicy Bypass -File build\sign.ps1
+)
+
+echo [SUCCESS] Build Selesai: bin\208softwarecenter.exe
 echo =======================================================
