@@ -24,10 +24,11 @@ if %ERRORLEVEL% NEQ 0 (
 )
 
 echo [2/3] Compiling C++ Win32 GDI+ Sources...
-g++ -std=c++17 -O2 -mwindows ^
+g++ -std=c++17 -O2 -s -mwindows ^
     -static -static-libgcc -static-libstdc++ ^
     -specs=build/no-default-manifest.specs ^
     -Wl,--subsystem,windows:5.1 ^
+    -Wl,--nxcompat -Wl,--dynamicbase ^
     -Isrc ^
     src\main.cpp ^
     src\core\packing_engine.cpp ^

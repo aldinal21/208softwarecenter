@@ -1,5 +1,8 @@
 #include <windows.h>
 
+// Application Icon (First icon in RC becomes the default file icon in Windows Explorer)
+1 ICON "src/app.ico"
+
 // Manifest for visual styles & compatibility
 1 24 "src/app.manifest"
 
