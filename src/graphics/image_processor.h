@@ -16,6 +16,12 @@ public:
 
     // Cache image loader agar tidak re-read disk berulang kali saat render preview
     Gdiplus::Bitmap* GetOrLoadBitmap(const std::wstring& filePath);
+    Gdiplus::Bitmap* GetOrProcessBgBitmap(
+        const std::wstring& filePath,
+        BgColorPreset bgPreset,
+        uint32_t customBgColor,
+        int tolerance
+    );
     void ClearCache();
 
     // Render A4 canvas ke GDI+ Graphics untuk 1 halaman (PageLayout)
@@ -83,8 +89,17 @@ public:
     // Helper untuk mencari CLSID encoder GDI+ (PNG, JPEG, BMP)
     static int GetEncoderClsid(const WCHAR* format, CLSID* pClsid);
 
+    // Static helper untuk memproses penggantian warna background pada bitmap
+    static std::unique_ptr<Gdiplus::Bitmap> ProcessStudioBackground(
+        Gdiplus::Bitmap* srcBmp,
+        BgColorPreset bgPreset,
+        uint32_t customBgColor,
+        int tolerance
+    );
+
 private:
     std::map<std::wstring, std::unique_ptr<Gdiplus::Bitmap>> m_imageCache;
+    std::map<std::wstring, std::unique_ptr<Gdiplus::Bitmap>> m_bgProcessedCache;
 
     void DrawPhotoSlot(
         Gdiplus::Graphics& graphics,

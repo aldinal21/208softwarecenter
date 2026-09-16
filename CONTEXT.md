@@ -1,37 +1,50 @@
-# 208 Software Center - Domain Model
+# Domain Context: 208 Software Center
 
-## Core Concepts
+## Glossary
 
-### Pas Foto
-Foto identitas berukuran fisik standar yang dicetak untuk keperluan administrasi resmi di Indonesia.
-- **Ukuran Standar**:
-  - `2x3` (efektif 21.6 x 27.9 mm)
-  - `3x4` (efektif 28.0 x 38.0 mm)
-  - `4x6` (efektif 38.0 x 56.0 mm)
-- **Background**: Latar belakang solid (Merah / Biru / Putih).
+### Photo Order Item
+Item foto pesanan pelanggan yang dimasukkan ke antrean cetak. Menyimpan path file gambar sumber, kuantitas cetak per ukuran standar (2x3, 3x4, 4x6), parameter framing & orientasi, serta konfigurasi filter warna/background.
 
-### Kertas Cetak (Sheet / Media)
-Media kertas cetak tempat susunan foto diletakkan.
-- **A4 (Primary)**: 210 x 297 mm (orientasi Portrait/Landscape).
-- **Custom / Reusable Cutoff**: Sisa potongan kertas yang digunakan kembali.
+### Framing Parameters
+Konfigurasi pemotongan (crop) dan sudut pandang pada foto:
+- `cropCenterX`: Titik pusat horizontal crop (0.0 - 1.0).
+- `cropCenterY`: Titik pusat vertikal crop (0.0 - 1.0, default 0.45 dengan bias atas untuk pas foto).
+- `zoomLevel`: Tingkat perbesaran (1.0x - 3.0x).
+- `rotation`: Sudut putar foto dalam kelipatan 90 derajat (0°, 90°, 180°, 270°).
 
-### Ingestion (Universal Drag & Drop)
-Kemampuan menerima file foto yang di-drag & drop dari sumber mana saja:
-- Windows File Explorer / File Manager
-- WhatsApp Desktop / WhatsApp Web
-- Browser Download bar (Chrome, Edge, Firefox)
-- Desktop / Folder lokal
-- Mendukung format file: `.jpg`, `.jpeg`, `.png`, `.bmp`, `.webp` (via decoding library / WIC / GDI+).
+### Black & White (B&W / Grayscale) Filter
+Filter desaturasi luminansi warna standar (NTSC/ITU-R BT.601: `0.299 R + 0.587 G + 0.114 B`) untuk mencetak pas foto hitam-putih resmi dokumen/ijazah, dapat diaktifkan per item foto tanpa merusak file asli.
 
-### Framing & Aspect Ratio Fitting
-Penyesuaian posisi (pan/zoom/center) foto input pelanggan agar masuk secara proporsional ke dalam rasio pas foto target tanpa terdistorsi/gepeng.
+### Photo Retouch & Enhancement
+Penyesuaian visual pencahayaan foto pelanggan toko:
+- `brightness`: Pengatur kecerahan (-50% s/d +50%).
+- `contrast`: Pengatur ketajaman kontras (-50% s/d +50%).
+- `autoEnhance`: Koreksi histogram otomatis untuk foto yang redup/gelap.
 
-### Top-Aligned Packing (Hemat Kertas)
-Algoritma penataan pas foto yang otomatis merapatkan susunan foto ke bagian atas-kiri kertas (Top-Left aligned), menyisakan bagian bawah lembar tetap bersih agar kertas A4 dapat dipakai ulang (reusable paper) di sesi cetak berikutnya.
+### Standard Pas Foto Background Presets
+Standar warna latar pas foto resmi di Indonesia:
+- **Merah Pas Foto** (`#D32F2F`): KTP & dokumen resmi untuk tahun kelahiran ganjil.
+- **Biru Pas Foto** (`#1976D2`): KTP & dokumen resmi untuk tahun kelahiran genap.
+- **Putih** (`#FFFFFF`): Dokumen visa, paspor internasional, dan buku nikah.
+- **Abu-Abu** (`#757575`): Dokumen kartu pegawai & instansi BUMN/swasta.
+- **Kuning** (`#FBC02D`): Pendaftaran instansi khusus/akademik.
+- **Custom Color**: Pemilihan warna bebas menggunakan dialog warna.
 
-### Cut Marks / Crop Lines
-Garis batas potong tipis (abu-abu/putus-putus) di sekeliling tiap pas foto sebagai panduan pemotongan menggunakan gunting atau alat pemotong kertas (paper cutter).
+### Smart Hybrid Background Removal
+Arsitektur penggantian latar belakang dua tahap:
+1. **Native Color Tool (Level 1)**: Penggantian latar foto polos/tembok berbasis toleransi warna tepi & *edge feathering* halus, 100% native Win32/GDI+ sangat cepat (< 0.01 detik) dan kompatibel dari Windows XP s/d Windows 11.
+2. **Offline AI Segmentation (Level 2)**: Model inferensi neural network offline berukuran kompak (~20–40 MB) untuk memisahkan subjek dari latar belakang yang ramai/kompleks.
 
-### Output Pipeline
-- **Direct Print**: Mencetak langsung ke printer Windows lokal via Win32 GDI Print API.
-- **Export**: Menyimpan hasil tata letak ke file gambar beresolusi tinggi (300 DPI) siap cetak.
+### Auto EXIF Normalization
+Proses otomatis pembacaan tag orientasi EXIF (`0x0112`) saat file gambar di-load dari disk, memutar gambar ke orientasi tegak natural sebelum ditampilkan di antarmuka.
+
+### Interactive Framing Modal
+Dialog interaktif modal native Win32 untuk menyesuaikan framing foto:
+- **Canvas Viewport**: Drag / pan foto dengan mouse untuk menggeser posisi kepala/wajah.
+- **Zoom Slider / Scroll Wheel**: Mengatur perbesaran foto.
+- **Rotate Buttons**: Tombol putar 90° searah / berlawanan jarum jam.
+- **Aspect Ratio Preview**: Toggle preview bingkai rasio 2x3, 3x4, dan 4x6 secara instan.
+- **Color & Background Toolbar**: Toolbar kontrol B&W, retouch, dan ganti latar belakang.
+
+### Smart Strip Packing
+Mesin tata letak (layout engine) berorientasi pemotongan guillotine lurus horizontal, mengelompokkan baris foto agar mudah dipotong dalam satu tarikan pisau cutter/mesin pemotong kertas.

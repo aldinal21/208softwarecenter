@@ -35,6 +35,8 @@ g++ -std=c++17 -O2 -s -fno-ident -fstack-protector-strong -mwindows ^
     src\graphics\image_processor.cpp ^
     src\ui\main_window.cpp ^
     src\ui\preview_dialog.cpp ^
+    src\ui\edit_photo_dialog.cpp ^
+    src\ui\custom_size_dialog.cpp ^
     build\resource.o ^
     -o bin\208softwarecenter.exe ^
     -lgdiplus -lgdi32 -lcomctl32 -lcomdlg32 -lole32 -lshell32 -lshlwapi -luxtheme -lmsimg32 -lwinspool

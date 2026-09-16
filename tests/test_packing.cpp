@@ -14,9 +14,10 @@ void TestSinglePhotoPacking() {
     PhotoOrderItem item;
     item.id = 1;
     item.sourceFilePath = L"test.jpg";
-    item.qty2x3 = 0;
-    item.qty3x4 = 2; // 2 pcs 3x4 (28 x 38 mm)
-    item.qty4x6 = 0;
+
+    PhotoPrintSize ps3x4 = CreateDefaultPrintSize(PhotoSizePreset::Size3x4);
+    ps3x4.quantity = 2; // 2 pcs 3x4 (28 x 38 mm)
+    item.printSizes.push_back(ps3x4);
     items.push_back(item);
 
     LayoutResult layout = PackingEngine::CalculateLayout(items, paper);
@@ -37,9 +38,19 @@ void TestMultiPresetPerPhoto() {
     PhotoOrderItem item;
     item.id = 1;
     item.sourceFilePath = L"customer_photo.jpg";
-    item.qty2x3 = 2;
-    item.qty3x4 = 5;
-    item.qty4x6 = 5;
+
+    PhotoPrintSize ps2x3 = CreateDefaultPrintSize(PhotoSizePreset::Size2x3);
+    ps2x3.quantity = 2;
+    item.printSizes.push_back(ps2x3);
+
+    PhotoPrintSize ps3x4 = CreateDefaultPrintSize(PhotoSizePreset::Size3x4);
+    ps3x4.quantity = 5;
+    item.printSizes.push_back(ps3x4);
+
+    PhotoPrintSize ps4x6 = CreateDefaultPrintSize(PhotoSizePreset::Size4x6);
+    ps4x6.quantity = 5;
+    item.printSizes.push_back(ps4x6);
+
     items.push_back(item);
 
     // Test with SmartStrip (Default)
@@ -82,21 +93,27 @@ void TestMixedPresesDensity() {
     PhotoOrderItem item1;
     item1.id = 1;
     item1.sourceFilePath = L"photo1.jpg";
-    item1.qty4x6 = 4;
+    PhotoPrintSize ps1 = CreateDefaultPrintSize(PhotoSizePreset::Size4x6);
+    ps1.quantity = 4;
+    item1.printSizes.push_back(ps1);
     items.push_back(item1);
 
     // 6 pcs 3x4 (28 x 38 mm)
     PhotoOrderItem item2;
     item2.id = 2;
     item2.sourceFilePath = L"photo2.jpg";
-    item2.qty3x4 = 6;
+    PhotoPrintSize ps2 = CreateDefaultPrintSize(PhotoSizePreset::Size3x4);
+    ps2.quantity = 6;
+    item2.printSizes.push_back(ps2);
     items.push_back(item2);
 
     // 8 pcs 2x3 (21.6 x 27.9 mm)
     PhotoOrderItem item3;
     item3.id = 3;
     item3.sourceFilePath = L"photo3.jpg";
-    item3.qty2x3 = 8;
+    PhotoPrintSize ps3 = CreateDefaultPrintSize(PhotoSizePreset::Size2x3);
+    ps3.quantity = 8;
+    item3.printSizes.push_back(ps3);
     items.push_back(item3);
 
     LayoutResult layout = PackingEngine::CalculateLayout(items, paper);
@@ -111,6 +128,40 @@ void TestMixedPresesDensity() {
     std::cout << "[PASS] TestMixedPresesDensity\n";
 }
 
+void TestCustomSizeAndPresetsPacking() {
+    std::cout << "[RUN] TestCustomSizeAndPresetsPacking (Visa US, 4R, dan Custom 5x7 cm)...\n";
+    PaperConfig paper;
+    std::vector<PhotoOrderItem> items;
+
+    PhotoOrderItem item;
+    item.id = 1;
+    item.sourceFilePath = L"custom_test.jpg";
+
+    // 2 pcs Visa US (50.8 x 50.8 mm)
+    PhotoPrintSize psVisa = CreateDefaultPrintSize(PhotoSizePreset::SizeVisaUS);
+    psVisa.quantity = 2;
+    item.printSizes.push_back(psVisa);
+
+    // 1 pcs Custom 5.0 x 7.0 cm (50.0 x 70.0 mm)
+    PhotoPrintSize psCustom;
+    psCustom.preset = PhotoSizePreset::Custom;
+    psCustom.label = L"Custom (5.0 x 7.0 cm)";
+    psCustom.widthMm = 50.0;
+    psCustom.heightMm = 70.0;
+    psCustom.quantity = 1;
+    item.printSizes.push_back(psCustom);
+
+    items.push_back(item);
+
+    LayoutResult layout = PackingEngine::CalculateLayout(items, paper);
+    assert(layout.slots.size() == 3);
+    assert(layout.fitsOnSinglePage == true);
+    assert(layout.usedHeightMm > 0.0);
+    std::cout << "  Custom size packed successfully! Slots placed: " << layout.slots.size()
+              << ", Used Height: " << layout.usedHeightMm << " mm\n";
+    std::cout << "[PASS] TestCustomSizeAndPresetsPacking\n";
+}
+
 void TestOverflowAndMultiPagePagination() {
     std::cout << "[RUN] TestOverflowAndMultiPagePagination...\n";
     PaperConfig paper;
@@ -120,7 +171,9 @@ void TestOverflowAndMultiPagePagination() {
     PhotoOrderItem item;
     item.id = 1;
     item.sourceFilePath = L"overflow.jpg";
-    item.qty4x6 = 100;
+    PhotoPrintSize ps = CreateDefaultPrintSize(PhotoSizePreset::Size4x6);
+    ps.quantity = 100;
+    item.printSizes.push_back(ps);
     items.push_back(item);
 
     LayoutResult layout = PackingEngine::CalculateLayout(items, paper);
@@ -153,6 +206,7 @@ int main() {
     TestSinglePhotoPacking();
     TestMultiPresetPerPhoto();
     TestMixedPresesDensity();
+    TestCustomSizeAndPresetsPacking();
     TestOverflowAndMultiPagePagination();
     std::cout << "========================================\n";
     std::cout << "  ALL PACKING ENGINE TESTS PASSED!      \n";

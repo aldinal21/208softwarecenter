@@ -26,6 +26,7 @@ private:
     void ResizeLayout(int clientWidth, int clientHeight);
     void UpdateLayoutCalculation();
     void RefreshOrderListUI();
+    void RefreshSizeListUI();
     void DrawPreviewCanvas(HDC hdc, const RECT& previewRect);
 
     // Actions
@@ -33,7 +34,14 @@ private:
     void OnAddSingleFilePath(const std::wstring& path);
     void OnRemoveSelectedPhoto();
     void OnClearAllPhotos();
-    void OnChangeQuantity(PhotoSizePreset preset, int newQty);
+    void OnDuplicateSelectedPhoto();
+    void OnToggleBlackAndWhite();
+    void OnEditPhotoCrop();
+    void OnAddSizeToSelectedPhoto();
+    void OnRemoveSelectedSize();
+    void OnToggleSizeOrientation();
+    void OnChangeSizeQuantity(int newQty);
+    void OnChangePaperSize();
     void OnChangePackingMode(PackingMode mode);
     void OnPrintPreview();
     void OnPrintDirect();
@@ -47,32 +55,33 @@ private:
     HFONT m_hFontHeader = nullptr;
     HFONT m_hFontBold = nullptr;
 
-    // Controls
+    // Controls - Group 1: Daftar Foto
     HWND m_hListOrders = nullptr;
     HWND m_hBtnAdd = nullptr;
     HWND m_hBtnRemove = nullptr;
     HWND m_hBtnClear = nullptr;
+    HWND m_hBtnDuplicate = nullptr;
+    HWND m_hBtnEditPhoto = nullptr;
 
-    // Multi-preset quantity controls per photo (- [ 0 ] +)
-    HWND m_hBtnMinus2x3 = nullptr;
-    HWND m_hEditQty2x3 = nullptr;
-    HWND m_hBtnPlus2x3 = nullptr;
+    // Controls - Group 2: Ukuran Cetak per Foto
+    HWND m_hComboSizePresets = nullptr;
+    HWND m_hBtnAddSize = nullptr;
+    HWND m_hListSizes = nullptr;
+    HWND m_hBtnMinusQty = nullptr;
+    HWND m_hEditQty = nullptr;
+    HWND m_hBtnPlusQty = nullptr;
+    HWND m_hBtnToggleOrientation = nullptr;
+    HWND m_hBtnRemoveSize = nullptr;
+    HWND m_hChkBw = nullptr;
 
-    HWND m_hBtnMinus3x4 = nullptr;
-    HWND m_hEditQty3x4 = nullptr;
-    HWND m_hBtnPlus3x4 = nullptr;
-
-    HWND m_hBtnMinus4x6 = nullptr;
-    HWND m_hEditQty4x6 = nullptr;
-    HWND m_hBtnPlus4x6 = nullptr;
-
-    // Packing mode controls
+    // Controls - Group 3: Ukuran Kertas & Mode Tata Letak (Packing)
+    HWND m_hComboPaper = nullptr;
     HWND m_hRadioSmartStrip = nullptr;
     HWND m_hRadioEasyCut = nullptr;
     HWND m_hRadioMaxDensity = nullptr;
     HWND m_hChkCutLines = nullptr;
 
-    // Output controls
+    // Controls - Group 4: Output & Ringkasan
     HWND m_hBtnPreview = nullptr;
     HWND m_hBtnPrint = nullptr;
     HWND m_hBtnExport = nullptr;

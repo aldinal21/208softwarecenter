@@ -1,5 +1,7 @@
 #include "main_window.h"
 #include "preview_dialog.h"
+#include "edit_photo_dialog.h"
+#include "custom_size_dialog.h"
 #include <commdlg.h>
 #include <shellapi.h>
 #include <shlwapi.h>
@@ -13,21 +15,22 @@ enum ControlIds {
     IDC_BTN_ADD,
     IDC_BTN_REMOVE,
     IDC_BTN_CLEAR,
+    IDC_BTN_DUPLICATE,
+    IDC_BTN_EDIT_PHOTO,
 
-    // Per-preset quantities (- [ 0 ] +)
-    IDC_BTN_MINUS_2X3,
-    IDC_EDIT_QTY_2X3,
-    IDC_BTN_PLUS_2X3,
+    // Dynamic print sizes per photo
+    IDC_COMBO_SIZE_PRESETS,
+    IDC_BTN_ADD_SIZE,
+    IDC_LIST_SIZES,
+    IDC_BTN_MINUS_QTY,
+    IDC_EDIT_QTY,
+    IDC_BTN_PLUS_QTY,
+    IDC_BTN_TOGGLE_ORIENTATION,
+    IDC_BTN_REMOVE_SIZE,
+    IDC_CHK_BW,
 
-    IDC_BTN_MINUS_3X4,
-    IDC_EDIT_QTY_3X4,
-    IDC_BTN_PLUS_3X4,
-
-    IDC_BTN_MINUS_4X6,
-    IDC_EDIT_QTY_4X6,
-    IDC_BTN_PLUS_4X6,
-
-    // Packing mode
+    // Paper size & Packing mode
+    IDC_COMBO_PAPER,
     IDC_RADIO_SMARTSTRIP,
     IDC_RADIO_EASYCUT,
     IDC_RADIO_MAXDENSITY,
@@ -44,6 +47,32 @@ enum ControlIds {
     IDC_BTN_PREV_PAGE,
     IDC_BTN_NEXT_PAGE,
     IDC_STATIC_PAGE_NUM
+};
+
+static const PhotoSizePreset kAllPresets[] = {
+    PhotoSizePreset::Size3x4,
+    PhotoSizePreset::Size2x3,
+    PhotoSizePreset::Size4x6,
+    PhotoSizePreset::SizeVisaUS,
+    PhotoSizePreset::SizeVisaSchengen,
+    PhotoSizePreset::SizeVisaChina,
+    PhotoSizePreset::SizeWallet,
+    PhotoSizePreset::Size2R,
+    PhotoSizePreset::Size3R,
+    PhotoSizePreset::Size4R,
+    PhotoSizePreset::Size5R,
+    PhotoSizePreset::Size6R,
+    PhotoSizePreset::Size8R,
+    PhotoSizePreset::Custom
+};
+
+static const PaperSizePreset kAllPaperPresets[] = {
+    PaperSizePreset::A4,
+    PaperSizePreset::F4_Folio,
+    PaperSizePreset::A3,
+    PaperSizePreset::A3Plus,
+    PaperSizePreset::Letter,
+    PaperSizePreset::Photo4R
 };
 
 MainWindow::MainWindow() {
@@ -89,11 +118,14 @@ bool MainWindow::Create(HINSTANCE hInstance, int nCmdShow) {
 
     if (!m_hwnd) return false;
 
-    // Keyboard Accelerators (Ctrl+P -> Print Preview)
-    ACCEL accels[1] = {
-        { FCONTROL | FVIRTKEY, 'P', IDC_BTN_PREVIEW }
+    // Keyboard Accelerators (Ctrl+P -> Print, Ctrl+S -> Export, Ctrl+O -> Add, Delete -> Remove)
+    ACCEL accels[] = {
+        { FCONTROL | FVIRTKEY, 'P', IDC_BTN_PRINT },
+        { FCONTROL | FVIRTKEY, 'S', IDC_BTN_EXPORT },
+        { FCONTROL | FVIRTKEY, 'O', IDC_BTN_ADD },
+        { FVIRTKEY, VK_DELETE, IDC_BTN_REMOVE }
     };
-    m_hAccel = CreateAcceleratorTableW(accels, 1);
+    m_hAccel = CreateAcceleratorTableW(accels, sizeof(accels) / sizeof(ACCEL));
 
     InitControls();
     UpdateLayoutCalculation();
@@ -135,15 +167,6 @@ LRESULT CALLBACK MainWindow::WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPA
 }
 
 void MainWindow::InitControls() {
-    // Setup keyboard accelerators (Ctrl+P, Ctrl+S, Ctrl+O, Delete)
-    ACCEL accels[] = {
-        { FCONTROL | FVIRTKEY, 'P', IDC_BTN_PRINT },
-        { FCONTROL | FVIRTKEY, 'S', IDC_BTN_EXPORT },
-        { FCONTROL | FVIRTKEY, 'O', IDC_BTN_ADD },
-        { FVIRTKEY, VK_DELETE, IDC_BTN_REMOVE }
-    };
-    m_hAccel = CreateAcceleratorTableW(accels, sizeof(accels) / sizeof(ACCEL));
-
     m_hFontUI = CreateFontW(
         -12, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
         DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
@@ -173,210 +196,210 @@ void MainWindow::InitControls() {
     m_hListOrders = CreateWindowExW(
         WS_EX_CLIENTEDGE, L"LISTBOX", nullptr,
         WS_CHILD | WS_VISIBLE | WS_VSCROLL | LBS_NOTIFY | LBS_HASSTRINGS,
-        22, 40, 326, 175,
+        22, 38, 326, 120,
         m_hwnd, (HMENU)IDC_LIST_ORDERS, m_hInstance, nullptr
     );
     SendMessageW(m_hListOrders, WM_SETFONT, (WPARAM)m_hFontUI, TRUE);
 
-    // Tombol Antrian
+    // Tombol Antrian (Add, Duplicate, Remove, Clear)
     m_hBtnAdd = CreateWindowExW(
         0, L"BUTTON", L"+ Tambah",
         WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
-        22, 222, 104, 28,
+        22, 162, 76, 26,
         m_hwnd, (HMENU)IDC_BTN_ADD, m_hInstance, nullptr
     );
     SendMessageW(m_hBtnAdd, WM_SETFONT, (WPARAM)m_hFontUI, TRUE);
 
+    m_hBtnDuplicate = CreateWindowExW(
+        0, L"BUTTON", L"📋 Duplikat",
+        WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
+        104, 162, 76, 26,
+        m_hwnd, (HMENU)IDC_BTN_DUPLICATE, m_hInstance, nullptr
+    );
+    SendMessageW(m_hBtnDuplicate, WM_SETFONT, (WPARAM)m_hFontUI, TRUE);
+
     m_hBtnRemove = CreateWindowExW(
         0, L"BUTTON", L"- Hapus",
         WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
-        133, 222, 104, 28,
+        186, 162, 76, 26,
         m_hwnd, (HMENU)IDC_BTN_REMOVE, m_hInstance, nullptr
     );
     SendMessageW(m_hBtnRemove, WM_SETFONT, (WPARAM)m_hFontUI, TRUE);
 
     m_hBtnClear = CreateWindowExW(
-        0, L"BUTTON", L"🗑️ Kosongkan",
+        0, L"BUTTON", L"🗑️ Bersihkan",
         WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
-        244, 222, 104, 28,
+        268, 162, 80, 26,
         m_hwnd, (HMENU)IDC_BTN_CLEAR, m_hInstance, nullptr
     );
     SendMessageW(m_hBtnClear, WM_SETFONT, (WPARAM)m_hFontUI, TRUE);
 
-    // Group Box 1: Jumlah Pas Foto per Ukuran
+    m_hBtnEditPhoto = CreateWindowExW(
+        0, L"BUTTON", L"📐 Atur Posisi / Putar / Latar (Edit Foto)...",
+        WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
+        22, 192, 326, 26,
+        m_hwnd, (HMENU)IDC_BTN_EDIT_PHOTO, m_hInstance, nullptr
+    );
+    SendMessageW(m_hBtnEditPhoto, WM_SETFONT, (WPARAM)m_hFontBold, TRUE);
+
+    // Group Box 2: Ukuran Cetak per Foto
     HWND hGrpSize = CreateWindowExW(
-        0, L"BUTTON", L"Jumlah Pas Foto per Ukuran (Foto Terpilih)",
+        0, L"BUTTON", L"Ukuran Cetak Foto Terpilih",
         WS_CHILD | WS_VISIBLE | BS_GROUPBOX,
-        22, 258, 326, 120,
+        22, 224, 326, 154,
         m_hwnd, nullptr, m_hInstance, nullptr
     );
     SendMessageW(hGrpSize, WM_SETFONT, (WPARAM)m_hFontBold, TRUE);
 
-    // 2x3 Row
-    HWND hLbl2x3 = CreateWindowExW(
-        0, L"STATIC", L"Ukuran 2x3:",
+    // Preset ComboBox & Tambah Button
+    m_hComboSizePresets = CreateWindowExW(
+        0, L"COMBOBOX", nullptr,
+        WS_CHILD | WS_VISIBLE | CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP,
+        32, 246, 218, 200,
+        m_hwnd, (HMENU)IDC_COMBO_SIZE_PRESETS, m_hInstance, nullptr
+    );
+    SendMessageW(m_hComboSizePresets, WM_SETFONT, (WPARAM)m_hFontUI, TRUE);
+
+    for (PhotoSizePreset p : kAllPresets) {
+        int idx = (int)SendMessageW(m_hComboSizePresets, CB_ADDSTRING, 0, (LPARAM)GetPresetName(p));
+        SendMessageW(m_hComboSizePresets, CB_SETITEMDATA, idx, (LPARAM)p);
+    }
+    SendMessageW(m_hComboSizePresets, CB_SETCURSEL, 0, 0); // Default: 3x4
+
+    m_hBtnAddSize = CreateWindowExW(
+        0, L"BUTTON", L"+ Tambah",
+        WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON | WS_TABSTOP,
+        254, 245, 86, 26,
+        m_hwnd, (HMENU)IDC_BTN_ADD_SIZE, m_hInstance, nullptr
+    );
+    SendMessageW(m_hBtnAddSize, WM_SETFONT, (WPARAM)m_hFontBold, TRUE);
+
+    // ListBox Ukuran Cetak
+    m_hListSizes = CreateWindowExW(
+        WS_EX_CLIENTEDGE, L"LISTBOX", nullptr,
+        WS_CHILD | WS_VISIBLE | WS_VSCROLL | LBS_NOTIFY | LBS_HASSTRINGS | WS_TABSTOP,
+        32, 276, 308, 62,
+        m_hwnd, (HMENU)IDC_LIST_SIZES, m_hInstance, nullptr
+    );
+    SendMessageW(m_hListSizes, WM_SETFONT, (WPARAM)m_hFontUI, TRUE);
+
+    // Stepper, Toggle Orientation, Remove Size & B&W
+    HWND hLblQtyTitle = CreateWindowExW(
+        0, L"STATIC", L"Qty:",
         WS_CHILD | WS_VISIBLE,
-        32, 280, 135, 22,
+        32, 348, 26, 20,
         m_hwnd, nullptr, m_hInstance, nullptr
     );
-    SendMessageW(hLbl2x3, WM_SETFONT, (WPARAM)m_hFontUI, TRUE);
+    SendMessageW(hLblQtyTitle, WM_SETFONT, (WPARAM)m_hFontUI, TRUE);
 
-    m_hBtnMinus2x3 = CreateWindowExW(
+    m_hBtnMinusQty = CreateWindowExW(
         0, L"BUTTON", L"-",
-        WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
-        172, 278, 26, 24,
-        m_hwnd, (HMENU)IDC_BTN_MINUS_2X3, m_hInstance, nullptr
+        WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON | WS_TABSTOP,
+        58, 345, 24, 24,
+        m_hwnd, (HMENU)IDC_BTN_MINUS_QTY, m_hInstance, nullptr
     );
-    SendMessageW(m_hBtnMinus2x3, WM_SETFONT, (WPARAM)m_hFontBold, TRUE);
+    SendMessageW(m_hBtnMinusQty, WM_SETFONT, (WPARAM)m_hFontBold, TRUE);
 
-    m_hEditQty2x3 = CreateWindowExW(
-        WS_EX_CLIENTEDGE, L"EDIT", L"0",
-        WS_CHILD | WS_VISIBLE | ES_NUMBER | ES_CENTER,
-        202, 278, 38, 24,
-        m_hwnd, (HMENU)IDC_EDIT_QTY_2X3, m_hInstance, nullptr
+    m_hEditQty = CreateWindowExW(
+        WS_EX_CLIENTEDGE, L"EDIT", L"1",
+        WS_CHILD | WS_VISIBLE | ES_NUMBER | ES_CENTER | WS_TABSTOP,
+        84, 345, 32, 24,
+        m_hwnd, (HMENU)IDC_EDIT_QTY, m_hInstance, nullptr
     );
-    SendMessageW(m_hEditQty2x3, WM_SETFONT, (WPARAM)m_hFontUI, TRUE);
+    SendMessageW(m_hEditQty, WM_SETFONT, (WPARAM)m_hFontUI, TRUE);
 
-    m_hBtnPlus2x3 = CreateWindowExW(
+    m_hBtnPlusQty = CreateWindowExW(
         0, L"BUTTON", L"+",
-        WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
-        244, 278, 26, 24,
-        m_hwnd, (HMENU)IDC_BTN_PLUS_2X3, m_hInstance, nullptr
+        WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON | WS_TABSTOP,
+        118, 345, 24, 24,
+        m_hwnd, (HMENU)IDC_BTN_PLUS_QTY, m_hInstance, nullptr
     );
-    SendMessageW(m_hBtnPlus2x3, WM_SETFONT, (WPARAM)m_hFontBold, TRUE);
+    SendMessageW(m_hBtnPlusQty, WM_SETFONT, (WPARAM)m_hFontBold, TRUE);
 
-    HWND hLblPcs2x3 = CreateWindowExW(
-        0, L"STATIC", L"lembar",
-        WS_CHILD | WS_VISIBLE,
-        276, 280, 55, 20,
-        m_hwnd, nullptr, m_hInstance, nullptr
+    m_hBtnToggleOrientation = CreateWindowExW(
+        0, L"BUTTON", L"⇄ Putar",
+        WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON | WS_TABSTOP,
+        146, 345, 62, 24,
+        m_hwnd, (HMENU)IDC_BTN_TOGGLE_ORIENTATION, m_hInstance, nullptr
     );
-    SendMessageW(hLblPcs2x3, WM_SETFONT, (WPARAM)m_hFontUI, TRUE);
+    SendMessageW(m_hBtnToggleOrientation, WM_SETFONT, (WPARAM)m_hFontUI, TRUE);
 
-    // 3x4 Row
-    HWND hLbl3x4 = CreateWindowExW(
-        0, L"STATIC", L"Ukuran 3x4:",
-        WS_CHILD | WS_VISIBLE,
-        32, 308, 135, 22,
-        m_hwnd, nullptr, m_hInstance, nullptr
+    m_hBtnRemoveSize = CreateWindowExW(
+        0, L"BUTTON", L"🗑️ Hapus",
+        WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON | WS_TABSTOP,
+        212, 345, 60, 24,
+        m_hwnd, (HMENU)IDC_BTN_REMOVE_SIZE, m_hInstance, nullptr
     );
-    SendMessageW(hLbl3x4, WM_SETFONT, (WPARAM)m_hFontUI, TRUE);
+    SendMessageW(m_hBtnRemoveSize, WM_SETFONT, (WPARAM)m_hFontUI, TRUE);
 
-    m_hBtnMinus3x4 = CreateWindowExW(
-        0, L"BUTTON", L"-",
-        WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
-        172, 306, 26, 24,
-        m_hwnd, (HMENU)IDC_BTN_MINUS_3X4, m_hInstance, nullptr
+    m_hChkBw = CreateWindowExW(
+        0, L"BUTTON", L"⚫⚪ B&W",
+        WS_CHILD | WS_VISIBLE | BS_AUTOCHECKBOX | WS_TABSTOP,
+        276, 347, 66, 20,
+        m_hwnd, (HMENU)IDC_CHK_BW, m_hInstance, nullptr
     );
-    SendMessageW(m_hBtnMinus3x4, WM_SETFONT, (WPARAM)m_hFontBold, TRUE);
+    SendMessageW(m_hChkBw, WM_SETFONT, (WPARAM)m_hFontUI, TRUE);
 
-    m_hEditQty3x4 = CreateWindowExW(
-        WS_EX_CLIENTEDGE, L"EDIT", L"0",
-        WS_CHILD | WS_VISIBLE | ES_NUMBER | ES_CENTER,
-        202, 306, 38, 24,
-        m_hwnd, (HMENU)IDC_EDIT_QTY_3X4, m_hInstance, nullptr
-    );
-    SendMessageW(m_hEditQty3x4, WM_SETFONT, (WPARAM)m_hFontUI, TRUE);
-
-    m_hBtnPlus3x4 = CreateWindowExW(
-        0, L"BUTTON", L"+",
-        WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
-        244, 306, 26, 24,
-        m_hwnd, (HMENU)IDC_BTN_PLUS_3X4, m_hInstance, nullptr
-    );
-    SendMessageW(m_hBtnPlus3x4, WM_SETFONT, (WPARAM)m_hFontBold, TRUE);
-
-    HWND hLblPcs3x4 = CreateWindowExW(
-        0, L"STATIC", L"lembar",
-        WS_CHILD | WS_VISIBLE,
-        276, 308, 55, 20,
-        m_hwnd, nullptr, m_hInstance, nullptr
-    );
-    SendMessageW(hLblPcs3x4, WM_SETFONT, (WPARAM)m_hFontUI, TRUE);
-
-    // 4x6 Row
-    HWND hLbl4x6 = CreateWindowExW(
-        0, L"STATIC", L"Ukuran 4x6:",
-        WS_CHILD | WS_VISIBLE,
-        32, 336, 135, 22,
-        m_hwnd, nullptr, m_hInstance, nullptr
-    );
-    SendMessageW(hLbl4x6, WM_SETFONT, (WPARAM)m_hFontUI, TRUE);
-
-    m_hBtnMinus4x6 = CreateWindowExW(
-        0, L"BUTTON", L"-",
-        WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
-        172, 334, 26, 24,
-        m_hwnd, (HMENU)IDC_BTN_MINUS_4X6, m_hInstance, nullptr
-    );
-    SendMessageW(m_hBtnMinus4x6, WM_SETFONT, (WPARAM)m_hFontBold, TRUE);
-
-    m_hEditQty4x6 = CreateWindowExW(
-        WS_EX_CLIENTEDGE, L"EDIT", L"0",
-        WS_CHILD | WS_VISIBLE | ES_NUMBER | ES_CENTER,
-        202, 334, 38, 24,
-        m_hwnd, (HMENU)IDC_EDIT_QTY_4X6, m_hInstance, nullptr
-    );
-    SendMessageW(m_hEditQty4x6, WM_SETFONT, (WPARAM)m_hFontUI, TRUE);
-
-    m_hBtnPlus4x6 = CreateWindowExW(
-        0, L"BUTTON", L"+",
-        WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
-        244, 334, 26, 24,
-        m_hwnd, (HMENU)IDC_BTN_PLUS_4X6, m_hInstance, nullptr
-    );
-    SendMessageW(m_hBtnPlus4x6, WM_SETFONT, (WPARAM)m_hFontBold, TRUE);
-
-    HWND hLblPcs4x6 = CreateWindowExW(
-        0, L"STATIC", L"lembar",
-        WS_CHILD | WS_VISIBLE,
-        276, 336, 55, 20,
-        m_hwnd, nullptr, m_hInstance, nullptr
-    );
-    SendMessageW(hLblPcs4x6, WM_SETFONT, (WPARAM)m_hFontUI, TRUE);
-
-    // Group Box 2: Mode Penataan & Pemotongan
+    // Group Box 3: Ukuran Kertas & Mode Tata Letak (Packing)
     HWND hGrpMode = CreateWindowExW(
-        0, L"BUTTON", L"Mode Penataan Kertas A4",
+        0, L"BUTTON", L"Ukuran Kertas & Tata Letak",
         WS_CHILD | WS_VISIBLE | BS_GROUPBOX,
-        22, 386, 326, 120,
+        22, 386, 326, 148,
         m_hwnd, nullptr, m_hInstance, nullptr
     );
     SendMessageW(hGrpMode, WM_SETFONT, (WPARAM)m_hFontBold, TRUE);
 
-    // Radio SmartStrip (Default)
+    HWND hLblPaper = CreateWindowExW(
+        0, L"STATIC", L"Kertas:",
+        WS_CHILD | WS_VISIBLE,
+        34, 408, 48, 20,
+        m_hwnd, nullptr, m_hInstance, nullptr
+    );
+    SendMessageW(hLblPaper, WM_SETFONT, (WPARAM)m_hFontUI, TRUE);
+
+    m_hComboPaper = CreateWindowExW(
+        0, L"COMBOBOX", nullptr,
+        WS_CHILD | WS_VISIBLE | CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP,
+        84, 405, 256, 200,
+        m_hwnd, (HMENU)IDC_COMBO_PAPER, m_hInstance, nullptr
+    );
+    SendMessageW(m_hComboPaper, WM_SETFONT, (WPARAM)m_hFontUI, TRUE);
+
+    for (PaperSizePreset p : kAllPaperPresets) {
+        int idx = (int)SendMessageW(m_hComboPaper, CB_ADDSTRING, 0, (LPARAM)GetPaperPresetName(p));
+        SendMessageW(m_hComboPaper, CB_SETITEMDATA, idx, (LPARAM)p);
+    }
+    SendMessageW(m_hComboPaper, CB_SETCURSEL, 0, 0); // Default: A4
+
     m_hRadioSmartStrip = CreateWindowExW(
         0, L"BUTTON", L"⚡ Smart Strip (Gunting Mudah & Hemat)",
-        WS_CHILD | WS_VISIBLE | BS_AUTORADIOBUTTON | WS_GROUP,
-        34, 406, 300, 20,
+        WS_CHILD | WS_VISIBLE | BS_AUTORADIOBUTTON,
+        34, 434, 300, 18,
         m_hwnd, (HMENU)IDC_RADIO_SMARTSTRIP, m_hInstance, nullptr
     );
-    SendMessageW(m_hRadioSmartStrip, WM_SETFONT, (WPARAM)m_hFontUI, TRUE);
+    SendMessageW(m_hRadioSmartStrip, WM_SETFONT, (WPARAM)m_hFontBold, TRUE);
     SendMessageW(m_hRadioSmartStrip, BM_SETCHECK, BST_CHECKED, 0);
 
-    // Radio EasyCut
     m_hRadioEasyCut = CreateWindowExW(
-        0, L"BUTTON", L"✂️ Baris Murni (1 Baris 1 Ukuran)",
+        0, L"BUTTON", L"✂️ Baris Murni (1 Baris 1 Ukuran Sama)",
         WS_CHILD | WS_VISIBLE | BS_AUTORADIOBUTTON,
-        34, 428, 300, 20,
+        34, 455, 300, 18,
         m_hwnd, (HMENU)IDC_RADIO_EASYCUT, m_hInstance, nullptr
     );
     SendMessageW(m_hRadioEasyCut, WM_SETFONT, (WPARAM)m_hFontUI, TRUE);
 
-    // Radio MaxDensity
     m_hRadioMaxDensity = CreateWindowExW(
         0, L"BUTTON", L"📐 Hemat Maksimal (Isi Celah Kosong)",
         WS_CHILD | WS_VISIBLE | BS_AUTORADIOBUTTON,
-        34, 450, 300, 20,
+        34, 476, 300, 18,
         m_hwnd, (HMENU)IDC_RADIO_MAXDENSITY, m_hInstance, nullptr
     );
     SendMessageW(m_hRadioMaxDensity, WM_SETFONT, (WPARAM)m_hFontUI, TRUE);
 
-    // Checkbox Cut Lines
     m_hChkCutLines = CreateWindowExW(
         0, L"BUTTON", L"Garis Batas Potong (Cut Guide Lines)",
         WS_CHILD | WS_VISIBLE | BS_AUTOCHECKBOX,
-        34, 474, 300, 20,
+        34, 500, 300, 18,
         m_hwnd, (HMENU)IDC_CHK_CUTLINES, m_hInstance, nullptr
     );
     SendMessageW(m_hChkCutLines, WM_SETFONT, (WPARAM)m_hFontUI, TRUE);
@@ -386,7 +409,7 @@ void MainWindow::InitControls() {
     m_hStaticInfo = CreateWindowExW(
         0, L"STATIC", L"Total Foto: 0 lembar",
         WS_CHILD | WS_VISIBLE,
-        22, 506, 326, 20,
+        22, 542, 326, 18,
         m_hwnd, (HMENU)IDC_STATIC_INFO, m_hInstance, nullptr
     );
     SendMessageW(m_hStaticInfo, WM_SETFONT, (WPARAM)m_hFontBold, TRUE);
@@ -394,7 +417,7 @@ void MainWindow::InitControls() {
     m_hStaticScrap = CreateWindowExW(
         0, L"STATIC", L"Sisa Kertas A4: 29.7 cm (Utuh)",
         WS_CHILD | WS_VISIBLE,
-        22, 528, 326, 24,
+        22, 562, 326, 20,
         m_hwnd, (HMENU)IDC_STATIC_SCRAP, m_hInstance, nullptr
     );
     SendMessageW(m_hStaticScrap, WM_SETFONT, (WPARAM)m_hFontUI, TRUE);
@@ -403,7 +426,7 @@ void MainWindow::InitControls() {
     m_hBtnPreview = CreateWindowExW(
         0, L"BUTTON", L"🔍 Pratinjau Cetak (Print Preview)",
         WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
-        22, 558, 326, 36,
+        22, 588, 326, 30,
         m_hwnd, (HMENU)IDC_BTN_PREVIEW, m_hInstance, nullptr
     );
     SendMessageW(m_hBtnPreview, WM_SETFONT, (WPARAM)m_hFontHeader, TRUE);
@@ -411,153 +434,222 @@ void MainWindow::InitControls() {
     m_hBtnPrint = CreateWindowExW(
         0, L"BUTTON", L"🖨️ Cetak Langsung (Ctrl+P)",
         WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
-        22, 598, 326, 36,
+        22, 622, 326, 30,
         m_hwnd, (HMENU)IDC_BTN_PRINT, m_hInstance, nullptr
     );
-    SendMessageW(m_hBtnPrint, WM_SETFONT, (WPARAM)m_hFontBold, TRUE);
+    SendMessageW(m_hBtnPrint, WM_SETFONT, (WPARAM)m_hFontHeader, TRUE);
 
     m_hBtnExport = CreateWindowExW(
-        0, L"BUTTON", L"💾 Export (PDF / PNG / JPG)",
+        0, L"BUTTON", L"💾 Export Gambar / PDF (Ctrl+S)",
         WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
-        22, 638, 326, 32,
+        22, 656, 326, 28,
         m_hwnd, (HMENU)IDC_BTN_EXPORT, m_hInstance, nullptr
     );
     SendMessageW(m_hBtnExport, WM_SETFONT, (WPARAM)m_hFontUI, TRUE);
 
-    // Page navigation bar (di atas canvas preview)
+    // Navigasi Halaman Preview
     m_hBtnPrevPage = CreateWindowExW(
-        0, L"BUTTON", L"◀ Hal Sebelumnya",
+        0, L"BUTTON", L"◀ Hal. Sblm",
         WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
-        380, 10, 140, 28,
+        375, 12, 90, 26,
         m_hwnd, (HMENU)IDC_BTN_PREV_PAGE, m_hInstance, nullptr
     );
-    SendMessageW(m_hBtnPrevPage, WM_SETFONT, (WPARAM)m_hFontBold, TRUE);
+    SendMessageW(m_hBtnPrevPage, WM_SETFONT, (WPARAM)m_hFontUI, TRUE);
 
     m_hStaticPageNum = CreateWindowExW(
-        0, L"STATIC", L"Halaman 1 / 1",
+        0, L"STATIC", L"Halaman 1 dari 1",
         WS_CHILD | WS_VISIBLE | SS_CENTER,
-        530, 15, 140, 20,
+        475, 15, 180, 24,
         m_hwnd, (HMENU)IDC_STATIC_PAGE_NUM, m_hInstance, nullptr
     );
-    SendMessageW(m_hStaticPageNum, WM_SETFONT, (WPARAM)m_hFontHeader, TRUE);
+    SendMessageW(m_hStaticPageNum, WM_SETFONT, (WPARAM)m_hFontBold, TRUE);
 
     m_hBtnNextPage = CreateWindowExW(
-        0, L"BUTTON", L"Hal Berikutnya ▶",
+        0, L"BUTTON", L"Hal. Brkt ▶",
         WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
-        680, 10, 140, 28,
+        665, 12, 90, 26,
         m_hwnd, (HMENU)IDC_BTN_NEXT_PAGE, m_hInstance, nullptr
     );
-    SendMessageW(m_hBtnNextPage, WM_SETFONT, (WPARAM)m_hFontBold, TRUE);
+    SendMessageW(m_hBtnNextPage, WM_SETFONT, (WPARAM)m_hFontUI, TRUE);
+
+    RefreshSizeListUI();
 }
 
 void MainWindow::ResizeLayout(int clientWidth, int clientHeight) {
-    if (m_hwnd == nullptr) return;
-
-    int previewAreaX = 375;
-    int previewAreaW = clientWidth - previewAreaX - 10;
-    if (previewAreaW > 0 && m_hBtnPrevPage && m_hStaticPageNum && m_hBtnNextPage) {
-        int navBtnW = 140;
-        int navLabelW = 140;
-        int navSpacing = 10;
-        int navTotalW = navBtnW + navSpacing + navLabelW + navSpacing + navBtnW; // 440
-        int startX = previewAreaX + (previewAreaW - navTotalW) / 2;
-        if (startX < previewAreaX) startX = previewAreaX;
-
-        SetWindowPos(m_hBtnPrevPage, nullptr, startX, 10, navBtnW, 28, SWP_NOZORDER | SWP_NOCOPYBITS);
-        SetWindowPos(m_hStaticPageNum, nullptr, startX + navBtnW + navSpacing, 15, navLabelW, 20, SWP_NOZORDER | SWP_NOCOPYBITS);
-        SetWindowPos(m_hBtnNextPage, nullptr, startX + navBtnW + navSpacing + navLabelW + navSpacing, 10, navBtnW, 28, SWP_NOZORDER | SWP_NOCOPYBITS);
-    }
-
-    InvalidateRect(m_hwnd, nullptr, TRUE);
+    RECT rcPreview = { 375, 48, clientWidth - 10, clientHeight - 10 };
+    InvalidateRect(m_hwnd, &rcPreview, TRUE);
 }
 
 void MainWindow::UpdateLayoutCalculation() {
     m_currentLayout = PackingEngine::CalculateLayout(m_orderItems, m_paperConfig);
 
     if (m_currentPageIndex >= m_currentLayout.totalPages) {
-        m_currentPageIndex = (m_currentLayout.totalPages > 0) ? (m_currentLayout.totalPages - 1) : 0;
+        m_currentPageIndex = (m_currentLayout.totalPages > 0) ? m_currentLayout.totalPages - 1 : 0;
     }
     if (m_currentPageIndex < 0) {
         m_currentPageIndex = 0;
     }
 
+    // Ambil nama kertas ringkas (tanpa dimensi panjang)
+    std::wstring paperName = GetPaperPresetName(m_paperConfig.paperPreset);
+    size_t parenPos = paperName.find(L" (");
+    if (parenPos != std::wstring::npos) {
+        paperName = paperName.substr(0, parenPos);
+    }
+
+    // Update status bar text
+    int totalPhotos = m_currentLayout.totalPhotosPlaced;
+    int totalPages = m_currentLayout.totalPages;
+    int curPage = m_currentPageIndex + 1;
+
     wchar_t infoText[256];
-    if (m_currentLayout.totalPages <= 1) {
-        swprintf_s(infoText, L"Total Foto: %d lembar (Muat 1 Lembar A4)",
-            m_currentLayout.totalPhotosPlaced);
+    if (totalPages <= 1) {
+        swprintf_s(infoText, L"Total Foto: %d lembar (1 Halaman %s)", totalPhotos, paperName.c_str());
     } else {
-        swprintf_s(infoText, L"Total Foto: %d lembar (%d Lembar A4)",
-            m_currentLayout.totalPhotosPlaced, m_currentLayout.totalPages);
+        swprintf_s(infoText, L"Total Foto: %d lembar (%d Lembar %s)", totalPhotos, totalPages, paperName.c_str());
     }
     SetWindowTextW(m_hStaticInfo, infoText);
 
-    double remMm = (m_currentPageIndex < (int)m_currentLayout.pages.size())
-        ? m_currentLayout.pages[m_currentPageIndex].remainingHeightMm
-        : m_paperConfig.heightMm;
-
+    // Update status scrap sisa kertas
     wchar_t scrapText[256];
-    if (remMm >= 2.0) {
-        swprintf_s(scrapText, L"Sisa Kertas Hal %d: %.1f cm\n(Bisa dipotong untuk kertas sisa)",
-            m_currentPageIndex + 1, remMm / 10.0);
+    if (m_orderItems.empty() || totalPhotos == 0) {
+        swprintf_s(scrapText, L"Sisa Kertas %s: %.1f cm (Utuh)", paperName.c_str(), m_paperConfig.heightMm / 10.0);
     } else {
-        swprintf_s(scrapText, L"Sisa Kertas Hal %d: Terpakai Penuh", m_currentPageIndex + 1);
+        double remMm = (m_currentPageIndex < (int)m_currentLayout.pages.size())
+            ? m_currentLayout.pages[m_currentPageIndex].remainingHeightMm
+            : m_currentLayout.remainingHeightMm;
+        double remCm = remMm / 10.0;
+        double usedMm = (m_currentPageIndex < (int)m_currentLayout.pages.size())
+            ? m_currentLayout.pages[m_currentPageIndex].usedHeightMm
+            : m_currentLayout.usedHeightMm;
+        double usedCm = usedMm / 10.0;
+
+        swprintf_s(scrapText, L"Terpakai: %.1f cm | Sisa Bersih: %.1f cm", usedCm, remCm);
     }
     SetWindowTextW(m_hStaticScrap, scrapText);
 
-    if (m_hStaticPageNum) {
-        wchar_t pageText[64];
-        swprintf_s(pageText, L"Halaman %d / %d",
-            m_currentPageIndex + 1,
-            (m_currentLayout.totalPages > 0 ? m_currentLayout.totalPages : 1));
-        SetWindowTextW(m_hStaticPageNum, pageText);
-    }
+    // Update page navigation buttons & text
+    wchar_t pageNavText[128];
+    swprintf_s(pageNavText, L"Halaman %d dari %d", curPage, (totalPages > 0 ? totalPages : 1));
+    SetWindowTextW(m_hStaticPageNum, pageNavText);
 
-    if (m_hBtnPrevPage) {
-        EnableWindow(m_hBtnPrevPage, m_currentPageIndex > 0);
-    }
-    if (m_hBtnNextPage) {
-        EnableWindow(m_hBtnNextPage, m_currentPageIndex < m_currentLayout.totalPages - 1);
-    }
+    EnableWindow(m_hBtnPrevPage, m_currentPageIndex > 0);
+    EnableWindow(m_hBtnNextPage, m_currentPageIndex < totalPages - 1);
 
+    // Trigger repaint of canvas
     InvalidateRect(m_hwnd, nullptr, FALSE);
 }
 
 void MainWindow::RefreshOrderListUI() {
+    int curSel = (int)SendMessageW(m_hListOrders, LB_GETCURSEL, 0, 0);
     SendMessageW(m_hListOrders, LB_RESETCONTENT, 0, 0);
 
     for (size_t i = 0; i < m_orderItems.size(); ++i) {
         const auto& item = m_orderItems[i];
-        std::wstring fileName = item.sourceFilePath;
-        size_t lastSlash = fileName.find_last_of(L"\\/");
-        if (lastSlash != std::wstring::npos) {
-            fileName = fileName.substr(lastSlash + 1);
+        std::wstring fileName = PathFindFileNameW(item.sourceFilePath.c_str());
+
+        // Format summary ukuran
+        std::wstring sizeSummary;
+        for (size_t s = 0; s < item.printSizes.size(); ++s) {
+            if (s > 0) sizeSummary += L", ";
+            std::wstring shortLabel = item.printSizes[s].label;
+            size_t parenPos = shortLabel.find(L" (");
+            if (parenPos != std::wstring::npos) {
+                shortLabel = shortLabel.substr(0, parenPos);
+            }
+            sizeSummary += shortLabel + L":" + std::to_wstring(item.printSizes[s].quantity);
+        }
+        if (sizeSummary.empty()) {
+            sizeSummary = L"0 lembar";
         }
 
-        std::wstring qtySummary;
-        if (item.qty2x3 > 0) qtySummary += L"2x3:" + std::to_wstring(item.qty2x3) + L" ";
-        if (item.qty3x4 > 0) qtySummary += L"3x4:" + std::to_wstring(item.qty3x4) + L" ";
-        if (item.qty4x6 > 0) qtySummary += L"4x6:" + std::to_wstring(item.qty4x6) + L" ";
-        if (qtySummary.empty()) qtySummary = L"0 pcs";
-        else qtySummary += L"(" + std::to_wstring(item.GetTotalQuantity()) + L" pcs)";
-
         wchar_t itemText[256];
-        swprintf_s(itemText, L"[%d] %s - %s",
-            static_cast<int>(i + 1),
-            fileName.c_str(),
-            qtySummary.c_str()
-        );
+        if (item.isBlackAndWhite) {
+            swprintf_s(itemText, L"%zu. %s [%s] [B&W]", i + 1, fileName.c_str(), sizeSummary.c_str());
+        } else {
+            swprintf_s(itemText, L"%zu. %s [%s]", i + 1, fileName.c_str(), sizeSummary.c_str());
+        }
 
         SendMessageW(m_hListOrders, LB_ADDSTRING, 0, (LPARAM)itemText);
     }
 
+    if (!m_orderItems.empty()) {
+        if (curSel < 0 || curSel >= (int)m_orderItems.size()) {
+            curSel = 0;
+        }
+        SendMessageW(m_hListOrders, LB_SETCURSEL, curSel, 0);
+    }
+
+    RefreshSizeListUI();
     UpdateLayoutCalculation();
+}
+
+void MainWindow::RefreshSizeListUI() {
+    int sel = (int)SendMessageW(m_hListOrders, LB_GETCURSEL, 0, 0);
+    int sizeSel = (int)SendMessageW(m_hListSizes, LB_GETCURSEL, 0, 0);
+
+    m_isUpdatingUI = true;
+    SendMessageW(m_hListSizes, LB_RESETCONTENT, 0, 0);
+
+    if (sel < 0 || sel >= (int)m_orderItems.size()) {
+        EnableWindow(m_hComboSizePresets, FALSE);
+        EnableWindow(m_hBtnAddSize, FALSE);
+        EnableWindow(m_hListSizes, FALSE);
+        EnableWindow(m_hBtnMinusQty, FALSE);
+        EnableWindow(m_hEditQty, FALSE);
+        EnableWindow(m_hBtnPlusQty, FALSE);
+        EnableWindow(m_hBtnToggleOrientation, FALSE);
+        EnableWindow(m_hBtnRemoveSize, FALSE);
+        EnableWindow(m_hChkBw, FALSE);
+        SetWindowTextW(m_hEditQty, L"0");
+        SendMessageW(m_hChkBw, BM_SETCHECK, BST_UNCHECKED, 0);
+        m_isUpdatingUI = false;
+        return;
+    }
+
+    EnableWindow(m_hComboSizePresets, TRUE);
+    EnableWindow(m_hBtnAddSize, TRUE);
+    EnableWindow(m_hListSizes, TRUE);
+    EnableWindow(m_hChkBw, TRUE);
+
+    const auto& item = m_orderItems[sel];
+    SendMessageW(m_hChkBw, BM_SETCHECK, item.isBlackAndWhite ? BST_CHECKED : BST_UNCHECKED, 0);
+
+    for (size_t i = 0; i < item.printSizes.size(); ++i) {
+        const auto& ps = item.printSizes[i];
+        wchar_t szLine[256];
+        swprintf_s(szLine, L"• %s  —  %d lbr", ps.label.c_str(), ps.quantity);
+        SendMessageW(m_hListSizes, LB_ADDSTRING, 0, (LPARAM)szLine);
+    }
+
+    if (!item.printSizes.empty()) {
+        if (sizeSel < 0 || sizeSel >= (int)item.printSizes.size()) {
+            sizeSel = 0;
+        }
+        SendMessageW(m_hListSizes, LB_SETCURSEL, sizeSel, 0);
+        SetWindowTextW(m_hEditQty, std::to_wstring(item.printSizes[sizeSel].quantity).c_str());
+
+        EnableWindow(m_hBtnMinusQty, TRUE);
+        EnableWindow(m_hEditQty, TRUE);
+        EnableWindow(m_hBtnPlusQty, TRUE);
+        EnableWindow(m_hBtnToggleOrientation, TRUE);
+        EnableWindow(m_hBtnRemoveSize, TRUE);
+    } else {
+        SetWindowTextW(m_hEditQty, L"0");
+        EnableWindow(m_hBtnMinusQty, FALSE);
+        EnableWindow(m_hEditQty, FALSE);
+        EnableWindow(m_hBtnPlusQty, FALSE);
+        EnableWindow(m_hBtnToggleOrientation, FALSE);
+        EnableWindow(m_hBtnRemoveSize, FALSE);
+    }
+
+    m_isUpdatingUI = false;
 }
 
 void MainWindow::DrawPreviewCanvas(HDC hdc, const RECT& previewRect) {
     int availW = previewRect.right - previewRect.left;
     int availH = previewRect.bottom - previewRect.top;
-
-    if (availW <= 50 || availH <= 50) return;
+    if (availW <= 10 || availH <= 10) return;
 
     // Hitung bounding box kertas A4 dengan mempertahankan aspect ratio 210 x 297
     double paperAspect = m_paperConfig.widthMm / m_paperConfig.heightMm; // ~0.707
@@ -607,7 +699,7 @@ void MainWindow::DrawPreviewCanvas(HDC hdc, const RECT& previewRect) {
 
     // Blit hasil render memBmp ke screen HDC
     Gdiplus::Graphics screenGraphics(hdc);
-    screenGraphics.DrawImage(&memBmp, static_cast<INT>(previewRect.left), static_cast<INT>(previewRect.top));
+    screenGraphics.DrawImage(&memBmp, (INT)previewRect.left, (INT)previewRect.top);
 }
 
 void MainWindow::OnAddPhotoFiles() {
@@ -640,12 +732,7 @@ void MainWindow::OnAddPhotoFiles() {
         if (!m_orderItems.empty()) {
             int newSel = (int)m_orderItems.size() - 1;
             SendMessageW(m_hListOrders, LB_SETCURSEL, newSel, 0);
-            const auto& item = m_orderItems[newSel];
-            m_isUpdatingUI = true;
-            SetWindowTextW(m_hEditQty2x3, std::to_wstring(item.qty2x3).c_str());
-            SetWindowTextW(m_hEditQty3x4, std::to_wstring(item.qty3x4).c_str());
-            SetWindowTextW(m_hEditQty4x6, std::to_wstring(item.qty4x6).c_str());
-            m_isUpdatingUI = false;
+            RefreshSizeListUI();
         }
     }
 }
@@ -655,15 +742,13 @@ void MainWindow::OnAddSingleFilePath(const std::wstring& path) {
     std::transform(ext.begin(), ext.end(), ext.begin(), ::towlower);
 
     if (ext != L".jpg" && ext != L".jpeg" && ext != L".png" && ext != L".bmp" && ext != L".tif" && ext != L".tiff") {
-        return;
+        return; // Skip non-image files
     }
 
     PhotoOrderItem item;
     item.id = m_nextItemId++;
     item.sourceFilePath = path;
-    item.qty2x3 = 0;
-    item.qty3x4 = 0; // Default 0 lembar
-    item.qty4x6 = 0;
+    // Foto baru mulai dengan daftar ukuran kosong sampai user menambahkan ukuran cetak
 
     m_orderItems.push_back(item);
 }
@@ -672,67 +757,243 @@ void MainWindow::OnRemoveSelectedPhoto() {
     int sel = (int)SendMessageW(m_hListOrders, LB_GETCURSEL, 0, 0);
     if (sel >= 0 && sel < (int)m_orderItems.size()) {
         m_orderItems.erase(m_orderItems.begin() + sel);
-        RefreshOrderListUI();
-        if (!m_orderItems.empty()) {
-            int newSel = (sel < (int)m_orderItems.size()) ? sel : (int)m_orderItems.size() - 1;
-            SendMessageW(m_hListOrders, LB_SETCURSEL, newSel, 0);
-            const auto& item = m_orderItems[newSel];
-            m_isUpdatingUI = true;
-            SetWindowTextW(m_hEditQty2x3, std::to_wstring(item.qty2x3).c_str());
-            SetWindowTextW(m_hEditQty3x4, std::to_wstring(item.qty3x4).c_str());
-            SetWindowTextW(m_hEditQty4x6, std::to_wstring(item.qty4x6).c_str());
-            m_isUpdatingUI = false;
-        } else {
-            m_isUpdatingUI = true;
-            SetWindowTextW(m_hEditQty2x3, L"0");
-            SetWindowTextW(m_hEditQty3x4, L"0");
-            SetWindowTextW(m_hEditQty4x6, L"0");
-            m_isUpdatingUI = false;
+        int newSel = sel;
+        if (newSel >= (int)m_orderItems.size()) {
+            newSel = (int)m_orderItems.size() - 1;
         }
+        RefreshOrderListUI();
+        if (newSel >= 0) {
+            SendMessageW(m_hListOrders, LB_SETCURSEL, newSel, 0);
+        }
+        RefreshSizeListUI();
+        UpdateLayoutCalculation();
     }
 }
 
 void MainWindow::OnClearAllPhotos() {
     if (m_orderItems.empty()) return;
-
-    if (MessageBoxW(m_hwnd, L"Hapus semua foto dari antrian?", L"Konfirmasi", MB_YESNO | MB_ICONQUESTION) == IDYES) {
+    if (MessageBoxW(m_hwnd, L"Kosongkan semua antrian foto?", L"Konfirmasi", MB_YESNO | MB_ICONQUESTION) == IDYES) {
         m_orderItems.clear();
-        m_imageProcessor.ClearCache();
-        m_isUpdatingUI = true;
-        SetWindowTextW(m_hEditQty2x3, L"0");
-        SetWindowTextW(m_hEditQty3x4, L"0");
-        SetWindowTextW(m_hEditQty4x6, L"0");
-        m_isUpdatingUI = false;
+        m_currentPageIndex = 0;
         RefreshOrderListUI();
+        RefreshSizeListUI();
+        UpdateLayoutCalculation();
     }
 }
 
-void MainWindow::OnChangeQuantity(PhotoSizePreset preset, int newQty) {
+void MainWindow::OnDuplicateSelectedPhoto() {
+    int sel = (int)SendMessageW(m_hListOrders, LB_GETCURSEL, 0, 0);
+    if (sel < 0 || sel >= (int)m_orderItems.size()) {
+        MessageBoxW(m_hwnd, L"Pilih foto yang ingin diduplikat dari daftar antrian!", L"Duplikat Foto", MB_OK | MB_ICONINFORMATION);
+        return;
+    }
+
+    PhotoOrderItem itemCopy = m_orderItems[sel];
+    itemCopy.id = m_nextItemId++;
+    m_orderItems.insert(m_orderItems.begin() + sel + 1, itemCopy);
+
+    RefreshOrderListUI();
+    SendMessageW(m_hListOrders, LB_SETCURSEL, sel + 1, 0);
+    RefreshSizeListUI();
+    UpdateLayoutCalculation();
+}
+
+void MainWindow::OnToggleBlackAndWhite() {
     int sel = (int)SendMessageW(m_hListOrders, LB_GETCURSEL, 0, 0);
     if (sel < 0 || sel >= (int)m_orderItems.size()) return;
 
-    if (newQty < 0) newQty = 0;
-    if (newQty > 99) newQty = 99;
+    m_orderItems[sel].isBlackAndWhite = (SendMessageW(m_hChkBw, BM_GETCHECK, 0, 0) == BST_CHECKED);
+    RefreshOrderListUI();
+    SendMessageW(m_hListOrders, LB_SETCURSEL, sel, 0);
+    UpdateLayoutCalculation();
+}
 
-    if (preset == PhotoSizePreset::Size2x3) {
-        m_orderItems[sel].qty2x3 = newQty;
-        m_isUpdatingUI = true;
-        SetWindowTextW(m_hEditQty2x3, std::to_wstring(newQty).c_str());
-        m_isUpdatingUI = false;
-    } else if (preset == PhotoSizePreset::Size3x4) {
-        m_orderItems[sel].qty3x4 = newQty;
-        m_isUpdatingUI = true;
-        SetWindowTextW(m_hEditQty3x4, std::to_wstring(newQty).c_str());
-        m_isUpdatingUI = false;
-    } else if (preset == PhotoSizePreset::Size4x6) {
-        m_orderItems[sel].qty4x6 = newQty;
-        m_isUpdatingUI = true;
-        SetWindowTextW(m_hEditQty4x6, std::to_wstring(newQty).c_str());
-        m_isUpdatingUI = false;
+void MainWindow::OnEditPhotoCrop() {
+    int sel = (int)SendMessageW(m_hListOrders, LB_GETCURSEL, 0, 0);
+    if (sel < 0 || sel >= (int)m_orderItems.size()) {
+        MessageBoxW(m_hwnd, L"Pilih foto yang ingin diatur posisinya dari daftar antrian!", L"Edit Foto", MB_OK | MB_ICONINFORMATION);
+        return;
+    }
+
+    PhotoOrderItem& item = m_orderItems[sel];
+    bool changed = EditPhotoDialog::ShowModal(m_hwnd, m_hInstance, item, m_imageProcessor);
+    if (changed) {
+        RefreshOrderListUI();
+        SendMessageW(m_hListOrders, LB_SETCURSEL, sel, 0);
+        RefreshSizeListUI();
+        UpdateLayoutCalculation();
+    }
+}
+
+void MainWindow::OnAddSizeToSelectedPhoto() {
+    int sel = (int)SendMessageW(m_hListOrders, LB_GETCURSEL, 0, 0);
+    if (sel < 0 || sel >= (int)m_orderItems.size()) return;
+
+    int comboSel = (int)SendMessageW(m_hComboSizePresets, CB_GETCURSEL, 0, 0);
+    if (comboSel < 0) return;
+
+    PhotoSizePreset preset = (PhotoSizePreset)SendMessageW(m_hComboSizePresets, CB_GETITEMDATA, comboSel, 0);
+
+    if (preset == PhotoSizePreset::Custom) {
+        PhotoPrintSize customSize;
+        customSize.preset = PhotoSizePreset::Custom;
+        customSize.widthMm = 50.0;
+        customSize.heightMm = 70.0;
+        customSize.quantity = 1;
+
+        if (CustomSizeDialog::ShowModal(m_hwnd, m_hInstance, customSize)) {
+            m_orderItems[sel].printSizes.push_back(customSize);
+            RefreshOrderListUI();
+            SendMessageW(m_hListOrders, LB_SETCURSEL, sel, 0);
+            SendMessageW(m_hListSizes, LB_SETCURSEL, (WPARAM)(m_orderItems[sel].printSizes.size() - 1), 0);
+            RefreshSizeListUI();
+            UpdateLayoutCalculation();
+        }
+        return;
+    }
+
+    // Auto-detect landscape orientation for studio photo sizes (2R to 8R)
+    bool isStudioSize = (preset == PhotoSizePreset::Size2R ||
+                         preset == PhotoSizePreset::Size3R ||
+                         preset == PhotoSizePreset::Size4R ||
+                         preset == PhotoSizePreset::Size5R ||
+                         preset == PhotoSizePreset::Size6R ||
+                         preset == PhotoSizePreset::Size8R);
+
+    bool autoLandscape = false;
+    if (isStudioSize && !m_orderItems[sel].sourceFilePath.empty()) {
+        std::unique_ptr<Gdiplus::Bitmap> bmp = std::make_unique<Gdiplus::Bitmap>(m_orderItems[sel].sourceFilePath.c_str());
+        if (bmp && bmp->GetWidth() > 0 && bmp->GetHeight() > 0) {
+            if (bmp->GetWidth() > bmp->GetHeight()) {
+                autoLandscape = true;
+            }
+        }
+    }
+
+    // Check if preset already exists with same orientation
+    bool found = false;
+    for (size_t i = 0; i < m_orderItems[sel].printSizes.size(); ++i) {
+        if (m_orderItems[sel].printSizes[i].preset == preset &&
+            m_orderItems[sel].printSizes[i].isLandscape == autoLandscape) {
+            m_orderItems[sel].printSizes[i].quantity++;
+            found = true;
+            RefreshOrderListUI();
+            SendMessageW(m_hListOrders, LB_SETCURSEL, sel, 0);
+            SendMessageW(m_hListSizes, LB_SETCURSEL, (WPARAM)i, 0);
+            RefreshSizeListUI();
+            UpdateLayoutCalculation();
+            break;
+        }
+    }
+
+    if (!found) {
+        PhotoPrintSize ps = CreateDefaultPrintSize(preset, autoLandscape);
+        m_orderItems[sel].printSizes.push_back(ps);
+        RefreshOrderListUI();
+        SendMessageW(m_hListOrders, LB_SETCURSEL, sel, 0);
+        SendMessageW(m_hListSizes, LB_SETCURSEL, (WPARAM)(m_orderItems[sel].printSizes.size() - 1), 0);
+        RefreshSizeListUI();
+        UpdateLayoutCalculation();
+    }
+}
+
+void MainWindow::OnRemoveSelectedSize() {
+    int sel = (int)SendMessageW(m_hListOrders, LB_GETCURSEL, 0, 0);
+    if (sel < 0 || sel >= (int)m_orderItems.size()) return;
+
+    int sizeSel = (int)SendMessageW(m_hListSizes, LB_GETCURSEL, 0, 0);
+    if (sizeSel < 0 || sizeSel >= (int)m_orderItems[sel].printSizes.size()) return;
+
+    m_orderItems[sel].printSizes.erase(m_orderItems[sel].printSizes.begin() + sizeSel);
+
+    int newSizeSel = sizeSel;
+    if (newSizeSel >= (int)m_orderItems[sel].printSizes.size()) {
+        newSizeSel = (int)m_orderItems[sel].printSizes.size() - 1;
     }
 
     RefreshOrderListUI();
     SendMessageW(m_hListOrders, LB_SETCURSEL, sel, 0);
+    if (newSizeSel >= 0) {
+        SendMessageW(m_hListSizes, LB_SETCURSEL, newSizeSel, 0);
+    }
+    RefreshSizeListUI();
+    UpdateLayoutCalculation();
+}
+
+void MainWindow::OnToggleSizeOrientation() {
+    int sel = (int)SendMessageW(m_hListOrders, LB_GETCURSEL, 0, 0);
+    if (sel < 0 || sel >= (int)m_orderItems.size()) return;
+
+    int sizeSel = (int)SendMessageW(m_hListSizes, LB_GETCURSEL, 0, 0);
+    if (sizeSel < 0 || sizeSel >= (int)m_orderItems[sel].printSizes.size()) return;
+
+    PhotoPrintSize& ps = m_orderItems[sel].printSizes[sizeSel];
+    ps.isLandscape = !ps.isLandscape;
+    std::swap(ps.widthMm, ps.heightMm);
+
+    // Recompute label
+    std::wstring baseLabel = GetPresetName(ps.preset);
+    if (ps.preset == PhotoSizePreset::Custom) {
+        wchar_t buf[128];
+        swprintf_s(buf, L"Custom (%.1f x %.1f cm)", ps.widthMm / 10.0, ps.heightMm / 10.0);
+        ps.label = buf;
+    } else {
+        if (ps.isLandscape) {
+            wchar_t buf[128];
+            swprintf_s(buf, L" (%.1f x %.1f cm) [Mendatar]", ps.widthMm / 10.0, ps.heightMm / 10.0);
+            size_t parenPos = baseLabel.find(L" (");
+            if (parenPos != std::wstring::npos) {
+                ps.label = baseLabel.substr(0, parenPos) + buf;
+            } else {
+                ps.label = baseLabel + buf;
+            }
+        } else {
+            ps.label = baseLabel;
+        }
+    }
+
+    RefreshOrderListUI();
+    SendMessageW(m_hListOrders, LB_SETCURSEL, sel, 0);
+    SendMessageW(m_hListSizes, LB_SETCURSEL, sizeSel, 0);
+    RefreshSizeListUI();
+    UpdateLayoutCalculation();
+}
+
+void MainWindow::OnChangeSizeQuantity(int newQty) {
+    int sel = (int)SendMessageW(m_hListOrders, LB_GETCURSEL, 0, 0);
+    if (sel < 0 || sel >= (int)m_orderItems.size()) return;
+
+    int sizeSel = (int)SendMessageW(m_hListSizes, LB_GETCURSEL, 0, 0);
+    if (sizeSel < 0 || sizeSel >= (int)m_orderItems[sel].printSizes.size()) return;
+
+    if (newQty < 1) newQty = 1;
+    if (newQty > 999) newQty = 999;
+
+    m_orderItems[sel].printSizes[sizeSel].quantity = newQty;
+
+    m_isUpdatingUI = true;
+    SetWindowTextW(m_hEditQty, std::to_wstring(newQty).c_str());
+    m_isUpdatingUI = false;
+
+    RefreshOrderListUI();
+    SendMessageW(m_hListOrders, LB_SETCURSEL, sel, 0);
+    SendMessageW(m_hListSizes, LB_SETCURSEL, sizeSel, 0);
+    RefreshSizeListUI();
+    UpdateLayoutCalculation();
+}
+
+void MainWindow::OnChangePaperSize() {
+    int comboSel = (int)SendMessageW(m_hComboPaper, CB_GETCURSEL, 0, 0);
+    if (comboSel < 0) return;
+
+    PaperSizePreset preset = (PaperSizePreset)SendMessageW(m_hComboPaper, CB_GETITEMDATA, comboSel, 0);
+    m_paperConfig.paperPreset = preset;
+    MillimeterSize dim = GetPaperPresetDimensionMm(preset);
+    m_paperConfig.widthMm = dim.widthMm;
+    m_paperConfig.heightMm = dim.heightMm;
+
+    m_currentPageIndex = 0;
+    UpdateLayoutCalculation();
 }
 
 void MainWindow::OnChangePackingMode(PackingMode mode) {
@@ -798,88 +1059,86 @@ void MainWindow::OnPrintDirect() {
                 int physOffsetX = GetDeviceCaps(hdcPrinter, PHYSICALOFFSETX);
                 int physOffsetY = GetDeviceCaps(hdcPrinter, PHYSICALOFFSETY);
 
-                int startPage = 0;
-                int endPage = (int)m_currentLayout.pages.size() - 1;
-                if ((pd.Flags & PD_PAGENUMS) && pd.nFromPage >= 1 && pd.nToPage >= pd.nFromPage) {
-                    startPage = pd.nFromPage - 1;
-                    endPage = pd.nToPage - 1;
-                    if (startPage < 0) startPage = 0;
-                    if (endPage >= (int)m_currentLayout.pages.size()) {
-                        endPage = (int)m_currentLayout.pages.size() - 1;
-                    }
-                }
+                int totalPagesToPrint = m_currentLayout.totalPages;
+                for (int pageIdx = 0; pageIdx < totalPagesToPrint; ++pageIdx) {
+                    StartPage(hdcPrinter);
+                    {
+                        Gdiplus::Graphics g(hdcPrinter);
+                        g.SetPageUnit(Gdiplus::UnitPixel);
+                        g.SetInterpolationMode(Gdiplus::InterpolationModeHighQualityBicubic);
+                        g.SetSmoothingMode(Gdiplus::SmoothingModeHighQuality);
+                        g.SetPixelOffsetMode(Gdiplus::PixelOffsetModeHighQuality);
 
-                int printedPages = 0;
-                for (int p = startPage; p <= endPage; ++p) {
-                    if (StartPage(hdcPrinter) > 0) {
-                        {
-                            Gdiplus::Graphics g(hdcPrinter);
-                            g.SetPageUnit(Gdiplus::UnitPixel);
-                            g.TranslateTransform(
-                                static_cast<Gdiplus::REAL>(-physOffsetX),
-                                static_cast<Gdiplus::REAL>(-physOffsetY)
-                            );
-                            m_imageProcessor.RenderSheet(g, m_currentLayout.pages[p], m_paperConfig, printDpiX, printDpiY, false, 1.0);
-                        }
-                        EndPage(hdcPrinter);
-                        printedPages++;
-                    }
-                }
+                        g.TranslateTransform(
+                            static_cast<Gdiplus::REAL>(-physOffsetX),
+                            static_cast<Gdiplus::REAL>(-physOffsetY)
+                        );
 
+                        m_imageProcessor.RenderSheet(
+                            g,
+                            m_currentLayout,
+                            m_paperConfig,
+                            pageIdx,
+                            printDpiX,
+                            false,
+                            1.0
+                        );
+                    }
+                    EndPage(hdcPrinter);
+                }
                 EndDoc(hdcPrinter);
-
-                wchar_t succMsg[128];
-                swprintf_s(succMsg, L"%d lembar halaman berhasil dikirim ke printer!", printedPages);
-                MessageBoxW(m_hwnd, succMsg, L"Cetak Berhasil", MB_OK | MB_ICONINFORMATION);
+                MessageBoxW(m_hwnd, L"Pencetakan berhasil dikirim ke antrian printer!", L"Pencetakan Selesai", MB_OK | MB_ICONINFORMATION);
             }
             DeleteDC(hdcPrinter);
         }
+        if (pd.hDevMode) GlobalFree(pd.hDevMode);
+        if (pd.hDevNames) GlobalFree(pd.hDevNames);
     }
 }
 
 void MainWindow::OnExportImage() {
     if (m_orderItems.empty()) {
-        MessageBoxW(m_hwnd, L"Belum ada foto yang ditambahkan!", L"Informasi Export", MB_OK | MB_ICONINFORMATION);
+        MessageBoxW(m_hwnd, L"Belum ada foto yang ditambahkan untuk di-export!", L"Export Gambar / PDF", MB_OK | MB_ICONINFORMATION);
         return;
     }
 
-    WCHAR szPath[MAX_PATH] = L"PasFoto_A4_Layout.pdf";
+    WCHAR szPath[MAX_PATH] = L"PasFoto_A4_SiapCetak.pdf";
+
     OPENFILENAMEW ofn = { sizeof(OPENFILENAMEW) };
     ofn.hwndOwner = m_hwnd;
-    ofn.lpstrFilter = L"Dokumen PDF Multi-Halaman (*.pdf)\0*.pdf\0Gambar PNG (*.png)\0*.png\0Gambar JPEG (*.jpg)\0*.jpg\0Semua Format yang Didukung (*.pdf;*.png;*.jpg)\0*.pdf;*.png;*.jpg\0";
+    ofn.lpstrFilter = L"Dokumen PDF (*.pdf)\0*.pdf\0Gambar PNG (*.png)\0*.png\0Gambar JPEG (*.jpg;*.jpeg)\0*.jpg;*.jpeg\0";
     ofn.lpstrFile = szPath;
     ofn.nMaxFile = MAX_PATH;
-    ofn.Flags = OFN_EXPLORER | OFN_OVERWRITEPROMPT | OFN_PATHMUSTEXIST;
-    ofn.nFilterIndex = 1;
+    ofn.Flags = OFN_OVERWRITEPROMPT | OFN_PATHMUSTEXIST;
     ofn.lpstrDefExt = L"pdf";
 
     if (GetSaveFileNameW(&ofn)) {
         std::wstring outPath = szPath;
-        std::wstring lowerPath = outPath;
-        for (auto& c : lowerPath) c = towlower(c);
+        std::wstring ext = PathFindExtensionW(szPath);
+        std::transform(ext.begin(), ext.end(), ext.begin(), ::towlower);
 
-        bool isPdf = (ofn.nFilterIndex == 1) || (lowerPath.length() >= 4 && lowerPath.substr(lowerPath.length() - 4) == L".pdf");
-        bool isJpg = (ofn.nFilterIndex == 3) || (lowerPath.length() >= 4 && lowerPath.substr(lowerPath.length() - 4) == L".jpg") || (lowerPath.length() >= 5 && lowerPath.substr(lowerPath.length() - 5) == L".jpeg");
-
-        if (isPdf) {
-            if (m_imageProcessor.ExportToPdf(outPath, m_currentLayout, m_paperConfig)) {
-                wchar_t succMsg[512];
-                swprintf_s(succMsg, L"Dokumen PDF %d halaman berhasil disimpan:\n%s", (int)m_currentLayout.pages.size(), outPath.c_str());
-                MessageBoxW(m_hwnd, succMsg, L"Export PDF Berhasil", MB_OK | MB_ICONINFORMATION);
+        if (ext == L".pdf") {
+            bool ok = m_imageProcessor.ExportToPdf(outPath, m_currentLayout, m_paperConfig);
+            if (ok) {
+                MessageBoxW(m_hwnd, L"Dokumen PDF siap cetak 300 DPI berhasil disimpan!", L"Export Sukses", MB_OK | MB_ICONINFORMATION);
             } else {
                 MessageBoxW(m_hwnd, L"Gagal menyimpan dokumen PDF!", L"Export Gagal", MB_OK | MB_ICONERROR);
             }
         } else {
-            std::wstring mime = isJpg ? L"image/jpeg" : L"image/png";
-            std::vector<std::wstring> files = m_imageProcessor.ExportAllPagesToFile(outPath, m_currentLayout, m_paperConfig, mime);
-            if (!files.empty()) {
-                wchar_t succMsg[512];
-                if (files.size() == 1) {
-                    swprintf_s(succMsg, L"File layout 300 DPI berhasil disimpan:\n%s", files[0].c_str());
-                } else {
-                    swprintf_s(succMsg, L"%d file layout halaman (300 DPI) berhasil disimpan!", (int)files.size());
-                }
-                MessageBoxW(m_hwnd, succMsg, L"Export Berhasil", MB_OK | MB_ICONINFORMATION);
+            std::wstring mimeType = L"image/png";
+            if (ext == L".jpg" || ext == L".jpeg") {
+                mimeType = L"image/jpeg";
+            }
+
+            bool ok = false;
+            if (m_currentPageIndex >= 0 && m_currentPageIndex < (int)m_currentLayout.pages.size()) {
+                ok = m_imageProcessor.ExportPageToFile(outPath, m_currentLayout.pages[m_currentPageIndex], m_paperConfig, mimeType);
+            } else {
+                ok = m_imageProcessor.ExportToFile(outPath, m_currentLayout, m_paperConfig, mimeType);
+            }
+
+            if (ok) {
+                MessageBoxW(m_hwnd, L"Gambar tata letak A4 siap cetak 300 DPI berhasil disimpan!", L"Export Sukses", MB_OK | MB_ICONINFORMATION);
             } else {
                 MessageBoxW(m_hwnd, L"Gagal menyimpan file gambar!", L"Export Gagal", MB_OK | MB_ICONERROR);
             }
@@ -893,9 +1152,9 @@ LRESULT MainWindow::HandleMessage(UINT uMsg, WPARAM wParam, LPARAM lParam) {
             HDROP hDrop = (HDROP)wParam;
             UINT count = DragQueryFileW(hDrop, 0xFFFFFFFF, nullptr, 0);
             for (UINT i = 0; i < count; ++i) {
-                WCHAR filePath[MAX_PATH];
-                if (DragQueryFileW(hDrop, i, filePath, MAX_PATH) > 0) {
-                    OnAddSingleFilePath(filePath);
+                WCHAR szFile[MAX_PATH];
+                if (DragQueryFileW(hDrop, i, szFile, MAX_PATH)) {
+                    OnAddSingleFilePath(szFile);
                 }
             }
             DragFinish(hDrop);
@@ -903,12 +1162,7 @@ LRESULT MainWindow::HandleMessage(UINT uMsg, WPARAM wParam, LPARAM lParam) {
             if (!m_orderItems.empty()) {
                 int newSel = (int)m_orderItems.size() - 1;
                 SendMessageW(m_hListOrders, LB_SETCURSEL, newSel, 0);
-                const auto& item = m_orderItems[newSel];
-                m_isUpdatingUI = true;
-                SetWindowTextW(m_hEditQty2x3, std::to_wstring(item.qty2x3).c_str());
-                SetWindowTextW(m_hEditQty3x4, std::to_wstring(item.qty3x4).c_str());
-                SetWindowTextW(m_hEditQty4x6, std::to_wstring(item.qty4x6).c_str());
-                m_isUpdatingUI = false;
+                RefreshSizeListUI();
             }
             return 0;
         }
@@ -923,51 +1177,41 @@ LRESULT MainWindow::HandleMessage(UINT uMsg, WPARAM wParam, LPARAM lParam) {
                 OnRemoveSelectedPhoto();
             } else if (wmId == IDC_BTN_CLEAR) {
                 OnClearAllPhotos();
-            } else if (wmId == IDC_BTN_MINUS_2X3) {
-                int sel = (int)SendMessageW(m_hListOrders, LB_GETCURSEL, 0, 0);
-                if (sel >= 0 && sel < (int)m_orderItems.size()) {
-                    OnChangeQuantity(PhotoSizePreset::Size2x3, m_orderItems[sel].qty2x3 - 1);
+            } else if (wmId == IDC_BTN_DUPLICATE) {
+                OnDuplicateSelectedPhoto();
+            } else if (wmId == IDC_BTN_EDIT_PHOTO) {
+                OnEditPhotoCrop();
+            } else if (wmId == IDC_BTN_ADD_SIZE) {
+                OnAddSizeToSelectedPhoto();
+            } else if (wmId == IDC_BTN_REMOVE_SIZE) {
+                OnRemoveSelectedSize();
+            } else if (wmId == IDC_BTN_MINUS_QTY) {
+                WCHAR szQty[32] = { 0 };
+                GetWindowTextW(m_hEditQty, szQty, 31);
+                int q = _wtoi(szQty);
+                if (q > 1) {
+                    OnChangeSizeQuantity(q - 1);
                 }
-            } else if (wmId == IDC_BTN_PLUS_2X3) {
-                int sel = (int)SendMessageW(m_hListOrders, LB_GETCURSEL, 0, 0);
-                if (sel >= 0 && sel < (int)m_orderItems.size()) {
-                    OnChangeQuantity(PhotoSizePreset::Size2x3, m_orderItems[sel].qty2x3 + 1);
+            } else if (wmId == IDC_BTN_PLUS_QTY) {
+                WCHAR szQty[32] = { 0 };
+                GetWindowTextW(m_hEditQty, szQty, 31);
+                int q = _wtoi(szQty);
+                if (q < 999) {
+                    OnChangeSizeQuantity(q + 1);
                 }
-            } else if (wmId == IDC_BTN_MINUS_3X4) {
-                int sel = (int)SendMessageW(m_hListOrders, LB_GETCURSEL, 0, 0);
-                if (sel >= 0 && sel < (int)m_orderItems.size()) {
-                    OnChangeQuantity(PhotoSizePreset::Size3x4, m_orderItems[sel].qty3x4 - 1);
+            } else if (wmId == IDC_EDIT_QTY && wmEvent == EN_KILLFOCUS) {
+                if (!m_isUpdatingUI) {
+                    WCHAR szQty[32] = { 0 };
+                    GetWindowTextW(m_hEditQty, szQty, 31);
+                    int q = _wtoi(szQty);
+                    OnChangeSizeQuantity(q);
                 }
-            } else if (wmId == IDC_BTN_PLUS_3X4) {
-                int sel = (int)SendMessageW(m_hListOrders, LB_GETCURSEL, 0, 0);
-                if (sel >= 0 && sel < (int)m_orderItems.size()) {
-                    OnChangeQuantity(PhotoSizePreset::Size3x4, m_orderItems[sel].qty3x4 + 1);
-                }
-            } else if (wmId == IDC_BTN_MINUS_4X6) {
-                int sel = (int)SendMessageW(m_hListOrders, LB_GETCURSEL, 0, 0);
-                if (sel >= 0 && sel < (int)m_orderItems.size()) {
-                    OnChangeQuantity(PhotoSizePreset::Size4x6, m_orderItems[sel].qty4x6 - 1);
-                }
-            } else if (wmId == IDC_BTN_PLUS_4X6) {
-                int sel = (int)SendMessageW(m_hListOrders, LB_GETCURSEL, 0, 0);
-                if (sel >= 0 && sel < (int)m_orderItems.size()) {
-                    OnChangeQuantity(PhotoSizePreset::Size4x6, m_orderItems[sel].qty4x6 + 1);
-                }
-            } else if (wmId == IDC_EDIT_QTY_2X3 && wmEvent == EN_KILLFOCUS && !m_isUpdatingUI) {
-                WCHAR buf[16] = { 0 };
-                GetWindowTextW(m_hEditQty2x3, buf, 15);
-                int qty = _wtoi(buf);
-                OnChangeQuantity(PhotoSizePreset::Size2x3, qty);
-            } else if (wmId == IDC_EDIT_QTY_3X4 && wmEvent == EN_KILLFOCUS && !m_isUpdatingUI) {
-                WCHAR buf[16] = { 0 };
-                GetWindowTextW(m_hEditQty3x4, buf, 15);
-                int qty = _wtoi(buf);
-                OnChangeQuantity(PhotoSizePreset::Size3x4, qty);
-            } else if (wmId == IDC_EDIT_QTY_4X6 && wmEvent == EN_KILLFOCUS && !m_isUpdatingUI) {
-                WCHAR buf[16] = { 0 };
-                GetWindowTextW(m_hEditQty4x6, buf, 15);
-                int qty = _wtoi(buf);
-                OnChangeQuantity(PhotoSizePreset::Size4x6, qty);
+            } else if (wmId == IDC_BTN_TOGGLE_ORIENTATION) {
+                OnToggleSizeOrientation();
+            } else if (wmId == IDC_COMBO_PAPER && wmEvent == CBN_SELCHANGE) {
+                OnChangePaperSize();
+            } else if (wmId == IDC_CHK_BW) {
+                OnToggleBlackAndWhite();
             } else if (wmId == IDC_RADIO_SMARTSTRIP) {
                 OnChangePackingMode(PackingMode::SmartStrip);
             } else if (wmId == IDC_RADIO_EASYCUT) {
@@ -975,8 +1219,7 @@ LRESULT MainWindow::HandleMessage(UINT uMsg, WPARAM wParam, LPARAM lParam) {
             } else if (wmId == IDC_RADIO_MAXDENSITY) {
                 OnChangePackingMode(PackingMode::MaxDensity);
             } else if (wmId == IDC_CHK_CUTLINES) {
-                LRESULT chk = SendMessageW(m_hChkCutLines, BM_GETCHECK, 0, 0);
-                m_paperConfig.drawCutLines = (chk == BST_CHECKED);
+                m_paperConfig.drawCutLines = (SendMessageW(m_hChkCutLines, BM_GETCHECK, 0, 0) == BST_CHECKED);
                 UpdateLayoutCalculation();
             } else if (wmId == IDC_BTN_PREVIEW) {
                 OnPrintPreview();
@@ -994,14 +1237,17 @@ LRESULT MainWindow::HandleMessage(UINT uMsg, WPARAM wParam, LPARAM lParam) {
                     m_currentPageIndex++;
                     UpdateLayoutCalculation();
                 }
+            } else if (wmId == IDC_LIST_ORDERS && wmEvent == LBN_DBLCLK) {
+                OnEditPhotoCrop();
             } else if (wmId == IDC_LIST_ORDERS && wmEvent == LBN_SELCHANGE) {
+                RefreshSizeListUI();
+            } else if (wmId == IDC_LIST_SIZES && wmEvent == LBN_SELCHANGE) {
                 int sel = (int)SendMessageW(m_hListOrders, LB_GETCURSEL, 0, 0);
-                if (sel >= 0 && sel < (int)m_orderItems.size()) {
-                    const auto& item = m_orderItems[sel];
+                int sizeSel = (int)SendMessageW(m_hListSizes, LB_GETCURSEL, 0, 0);
+                if (sel >= 0 && sel < (int)m_orderItems.size() &&
+                    sizeSel >= 0 && sizeSel < (int)m_orderItems[sel].printSizes.size()) {
                     m_isUpdatingUI = true;
-                    SetWindowTextW(m_hEditQty2x3, std::to_wstring(item.qty2x3).c_str());
-                    SetWindowTextW(m_hEditQty3x4, std::to_wstring(item.qty3x4).c_str());
-                    SetWindowTextW(m_hEditQty4x6, std::to_wstring(item.qty4x6).c_str());
+                    SetWindowTextW(m_hEditQty, std::to_wstring(m_orderItems[sel].printSizes[sizeSel].quantity).c_str());
                     m_isUpdatingUI = false;
                 }
             }
@@ -1013,18 +1259,6 @@ LRESULT MainWindow::HandleMessage(UINT uMsg, WPARAM wParam, LPARAM lParam) {
                 RedrawWindow(m_hwnd, nullptr, nullptr, RDW_INVALIDATE | RDW_ERASE | RDW_ALLCHILDREN | RDW_UPDATENOW);
             }
             return 0;
-        }
-
-        case WM_CTLCOLORSTATIC: {
-            HDC hdcStatic = (HDC)wParam;
-            SetBkMode(hdcStatic, OPAQUE);
-            SetBkColor(hdcStatic, GetSysColor(COLOR_BTNFACE));
-            SetTextColor(hdcStatic, GetSysColor(COLOR_WINDOWTEXT));
-            return (LRESULT)GetSysColorBrush(COLOR_BTNFACE);
-        }
-
-        case WM_CTLCOLORBTN: {
-            return (LRESULT)GetSysColorBrush(COLOR_BTNFACE);
         }
 
         case WM_SIZE: {
